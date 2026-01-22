@@ -1,13 +1,17 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 
 class ThemeService {
-  static const String userId = "I8PwtNA3QTEt44rxH8jN";
-  
   static Stream<bool> getDarkModeStream() {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) {
+      return Stream.value(false);
+    }
+    
     return FirebaseFirestore.instance
         .collection('users')
-        .doc(userId)
+        .doc(user.uid)
         .snapshots()
         .map((snapshot) {
           if (snapshot.exists && snapshot.data() != null) {

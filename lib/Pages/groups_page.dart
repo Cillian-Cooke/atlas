@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import '../Map_And_Bubbles/map_logic.dart';
 import '../Map_And_Bubbles/group_map_page.dart';
 import '../Widgets/icon_button.dart';
@@ -16,9 +17,6 @@ class GroupsPage extends StatefulWidget {
 }
 
 class _GroupsPageState extends State<GroupsPage> {
-  // Hardcoded user ID
-  static const String currentUserId = "I8PwtNA3QTEt44rxH8jN";
-  
   List<Map<String, dynamic>> userGroups = [];
   bool isLoading = true;
 
@@ -30,6 +28,14 @@ class _GroupsPageState extends State<GroupsPage> {
 
   Future<void> _loadUserGroups() async {
     try {
+      final user = FirebaseAuth.instance.currentUser;
+      if (user == null) {
+        if (mounted) {
+          setState(() => isLoading = false);
+        }
+        return;
+      }
+      final currentUserId = user.uid;
       // Query all groups where the current user is in the members array
       final querySnapshot = await FirebaseFirestore.instance
           .collection('groups')
@@ -101,6 +107,9 @@ class _GroupsPageState extends State<GroupsPage> {
                       itemBuilder: (context, index) {
                         // Last item is the "New Map" button
                         if (index == userGroups.length) {
+                          final user = FirebaseAuth.instance.currentUser;
+                          final currentUserId = user?.uid ?? '';
+                          
                           return Padding(
                             padding: const EdgeInsets.all(30),
                             child: IconButtonWidget(

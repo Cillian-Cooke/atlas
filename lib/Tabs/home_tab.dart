@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import '../Pages/home_page.dart';
 import '../PopUps/edit/filter_map_popup.dart';
 import '../PopUps/map_menu_popup.dart';
@@ -33,8 +34,6 @@ class _HomeTabState extends State<HomeTab> {
   final GlobalKey<HomePageState> _homePageKey = GlobalKey<HomePageState>();
   final GlobalKey _profileHeaderKey = GlobalKey();
   DropdownMenuController? _dropdownController;
-  
-  static const String userId = "I8PwtNA3QTEt44rxH8jN";
 
   @override
   void initState() {
@@ -64,6 +63,14 @@ class _HomeTabState extends State<HomeTab> {
 
   Future<void> _loadUsername() async {
     try {
+      final user = FirebaseAuth.instance.currentUser;
+      if (user == null) {
+        if (mounted) {
+          setState(() => _isLoading = false);
+        }
+        return;
+      }
+      final userId = user.uid;
       DocumentSnapshot doc = await FirebaseFirestore.instance
           .collection("users")
           .doc(userId)
@@ -123,6 +130,10 @@ class _HomeTabState extends State<HomeTab> {
   }
 
   Future<void> _handleProfileMapTap() async {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) return;
+    
+    final userId = user.uid;
     // Show the popup
     final result = await showMapMenuPopUp(context, userId);
 
@@ -171,6 +182,9 @@ class _HomeTabState extends State<HomeTab> {
 
   @override
   Widget build(BuildContext context) {
+    final user = FirebaseAuth.instance.currentUser;
+    final userId = user?.uid ?? '';
+    
     return Stack(
       children: [
         HomePage(

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import '../popup_container.dart';
 
 class SettingsPopUp extends StatefulWidget {
@@ -23,9 +24,15 @@ class _SettingsPopUpState extends State<SettingsPopUp> {
   }
 
   Future<void> _loadDarkMode() async {
-    // TODO: Replace with actual user ID logic
-    final userId = "I8PwtNA3QTEt44rxH8jN";
-    final doc = await FirebaseFirestore.instance.collection('users').doc(userId).get();
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) {
+      setState(() {
+        _darkMode = false;
+        _isLoading = false;
+      });
+      return;
+    }
+    final doc = await FirebaseFirestore.instance.collection('users').doc(user.uid).get();
     final data = doc.data();
     setState(() {
       _darkMode = (data != null && data['darkMode'] is bool) ? data['darkMode'] : false;
@@ -34,9 +41,9 @@ class _SettingsPopUpState extends State<SettingsPopUp> {
   }
 
   Future<void> _updateDarkMode(bool value) async {
-    // TODO: Replace with actual user ID logic
-    final userId = "I8PwtNA3QTEt44rxH8jN";
-    await FirebaseFirestore.instance.collection('users').doc(userId).update({'darkMode': value});
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) return;
+    await FirebaseFirestore.instance.collection('users').doc(user.uid).update({'darkMode': value});
     setState(() {
       _darkMode = value;
     });
