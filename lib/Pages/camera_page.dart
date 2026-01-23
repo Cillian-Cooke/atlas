@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_storage/firebase_storage.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'dart:io' show File;
 import 'package:flutter/foundation.dart' show kIsWeb;
 
@@ -23,10 +24,49 @@ class _CameraPageState extends State<CameraPage> {
   bool _commentsEnabled = true;
   bool _donationsEnabled = true;
   bool _isSaving = false;
+  bool _isLoadingUserData = true;
   
   // Image handling - store XFile instead of File
   final ImagePicker _picker = ImagePicker();
   List<XFile> _selectedImages = [];
+
+  @override
+  void initState() {
+    super.initState();
+    _loadUserData();
+  }
+
+  /// Load current user data from Firebase Auth and Firestore
+  Future<void> _loadUserData() async {
+    try {
+      final user = FirebaseAuth.instance.currentUser;
+      if (user != null) {
+        // Get user data from Firestore
+        final userDoc = await FirebaseFirestore.instance
+            .collection('users')
+            .doc(user.uid)
+            .get();
+
+        if (mounted) {
+          final userData = userDoc.data();
+          setState(() {
+            _userIDController.text = user.uid;
+            _usernameController.text = userData?['username'] ?? user.displayName ?? user.email ?? '';
+            _isLoadingUserData = false;
+          });
+        }
+      } else {
+        if (mounted) {
+          setState(() => _isLoadingUserData = false);
+        }
+      }
+    } catch (e) {
+      debugPrint('Error loading user data: $e');
+      if (mounted) {
+        setState(() => _isLoadingUserData = false);
+      }
+    }
+  }
   
   /// Pick multiple images from gallery
   Future<void> _pickImages() async {
@@ -168,7 +208,9 @@ class _CameraPageState extends State<CameraPage> {
         title: Text(widget.title),
         centerTitle: true,
       ),
-      body: SingleChildScrollView(
+      body: _isLoadingUserData
+          ? const Center(child: CircularProgressIndicator())
+          : SingleChildScrollView(
         padding: const EdgeInsets.all(15),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -265,18 +307,22 @@ class _CameraPageState extends State<CameraPage> {
             
             TextField(
               controller: _usernameController,
+              readOnly: true,
               decoration: const InputDecoration(
-                labelText: "Username",
+                labelText: "Username (Auto-populated)",
                 border: OutlineInputBorder(),
+                prefixIcon: Icon(Icons.person),
               ),
             ),
             const SizedBox(height: 15),
             
             TextField(
               controller: _userIDController,
+              readOnly: true,
               decoration: const InputDecoration(
-                labelText: "UserID",
+                labelText: "UserID (Auto-populated)",
                 border: OutlineInputBorder(),
+                prefixIcon: Icon(Icons.badge),
               ),
             ),
             const SizedBox(height: 15),

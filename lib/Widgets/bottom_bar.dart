@@ -105,7 +105,6 @@ class _MyNavigatorBarState extends State<MyNavigatorBar> {
     return WillPopScope(
       onWillPop: _onWillPop,
       child: Scaffold(
-        extendBody: true,
         body: IndexedStack(
           index: _selectedIndex,
           children: List.generate(6, (index) => _buildNavigator(index)), 
@@ -115,10 +114,6 @@ class _MyNavigatorBarState extends State<MyNavigatorBar> {
         bottomNavigationBar: Container(
           decoration: BoxDecoration(
             color: isDark ? const Color.fromARGB(255, 30, 30, 30) : Colors.white,
-            borderRadius: const BorderRadius.only(
-              topLeft: Radius.circular(20),
-              topRight: Radius.circular(20),
-            ),
             boxShadow: [
               BoxShadow(
                 blurRadius: 10,
@@ -146,7 +141,7 @@ class _MyNavigatorBarState extends State<MyNavigatorBar> {
               items: const [
                 BottomNavigationBarItem(icon: Icon(Icons.search), label: 'Search'),
                 BottomNavigationBarItem(icon: Icon(Icons.home), label: 'Home'),
-                BottomNavigationBarItem(icon: Icon(Icons.photo_camera), label: 'Camera'),
+                BottomNavigationBarItem(icon: Icon(Icons.add_circle_outline_outlined), label: 'Create'),
                 BottomNavigationBarItem(icon: Icon(Icons.diversity_3), label: 'Groups'),
                 BottomNavigationBarItem(icon: Icon(Icons.leaderboard), label: 'Comp'),
               ],

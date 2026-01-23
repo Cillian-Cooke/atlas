@@ -20,12 +20,44 @@ class _CreateGroupPopupState extends State<CreateGroupPopup> {
   List<String> members = [];
   List<String> posts = [];
   bool _isCreating = false;
+  bool _isLoadingCreatorData = true;
+  String _creatorUsername = '';
+  String _creatorEmail = '';
 
   @override
   void initState() {
     super.initState();
     // Add the current user as the first member
     members.add(widget.currentUserId);
+    _loadCreatorData();
+  }
+
+  /// Load creator's data from Firestore
+  Future<void> _loadCreatorData() async {
+    try {
+      final userDoc = await FirebaseFirestore.instance
+          .collection('users')
+          .doc(widget.currentUserId)
+          .get();
+
+      if (mounted) {
+        final userData = userDoc.data();
+        setState(() {
+          _creatorUsername = userData?['username'] ?? 'Unknown';
+          _creatorEmail = userData?['email'] ?? '';
+          _isLoadingCreatorData = false;
+        });
+      }
+    } catch (e) {
+      debugPrint('Error loading creator data: $e');
+      if (mounted) {
+        setState(() {
+          _creatorUsername = 'Unknown';
+          _creatorEmail = '';
+          _isLoadingCreatorData = false;
+        });
+      }
+    }
   }
 
   @override
@@ -316,13 +348,17 @@ class _CreateGroupPopupState extends State<CreateGroupPopup> {
     });
 
     try {
-      // Create the group document in Firestore
+      // Create the group document in Firestore with creator information
       final groupData = {
         'name': groupName,
         'labels': labels,
         'members': members,
         'posts': posts,
-        'createdBy': widget.currentUserId,
+        'createdBy': {
+          'uid': widget.currentUserId,
+          'username': _creatorUsername,
+          'email': _creatorEmail,
+        },
         'createdAt': FieldValue.serverTimestamp(),
       };
 
@@ -354,6 +390,15 @@ class _CreateGroupPopupState extends State<CreateGroupPopup> {
   Widget build(BuildContext context) {
     final screen = MediaQuery.of(context).size;
 
+    if (_isLoadingCreatorData) {
+      return SizedBox(
+        height: screen.height * 0.8,
+        child: const Center(
+          child: CircularProgressIndicator(),
+        ),
+      );
+    }
+
     return SizedBox(
       height: screen.height * 0.8,
       child: ListView(
@@ -366,6 +411,55 @@ class _CreateGroupPopupState extends State<CreateGroupPopup> {
                 fontSize: 35,
                 fontWeight: FontWeight.bold,
               ),
+            ),
+          ),
+          const SizedBox(height: 20),
+
+          // Creator Info Card
+          Container(
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: Colors.blue[50],
+              borderRadius: BorderRadius.circular(10),
+              border: Border.all(color: Colors.blue[200]!),
+            ),
+            child: Row(
+              children: [
+                Icon(Icons.verified_user, color: Colors.blue[700]),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text(
+                        'Group Creator',
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: Colors.grey,
+                        ),
+                      ),
+                      Text(
+                        _creatorUsername,
+                        style: TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.bold,
+                          color: Colors.blue[900],
+                        ),
+                      ),
+                      if (_creatorEmail.isNotEmpty)
+                        Text(
+                          _creatorEmail,
+                          style: const TextStyle(
+                            fontSize: 12,
+                            color: Colors.grey,
+                          ),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                    ],
+                  ),
+                ),
+              ],
             ),
           ),
           const SizedBox(height: 20),
