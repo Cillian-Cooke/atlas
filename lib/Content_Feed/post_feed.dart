@@ -80,20 +80,6 @@ class _FeedPageState extends State<PostFeedPage> {
         
         // Update the capturedBubbles ValueNotifier to refresh the feed
         widget.capturedBubbles?.value = capturedPostIds;
-        
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Viewing ${capturedPostIds.length} posts from ${result['userName']}'),
-            duration: const Duration(seconds: 3),
-            action: SnackBarAction(
-              label: 'Clear',
-              onPressed: () {
-                // Clear the filter to show all posts again
-                widget.capturedBubbles?.value = [];
-              },
-            ),
-          ),
-        );
       } else {
         print('❌ No post IDs received or list was empty');
       }
@@ -197,7 +183,7 @@ class _FeedPageState extends State<PostFeedPage> {
     int commentsCount = data['commentsCount'] ?? 0;
     List<dynamic> tags = data['tags'] ?? [];
     List<dynamic> imageUrls = data['imageUrls'] ?? [];
-    String? videoUrl = data['videoUrl']; // Get video URL if it exists
+    String? videoUrl = data['videoUrl'];
     Timestamp? createdAt = data['createdAt'];
     String dateString = createdAt != null
         ? _formatDate(createdAt.toDate())
@@ -371,17 +357,11 @@ class _FeedPageState extends State<PostFeedPage> {
     );
   }
 
-  /// Builds a widget to display a video in the post feed
-  /// Uses the video_player package to play videos from Firebase Storage
-  /// Shows a play button overlay and handles video playback
-  /// The VideoPlayerWidget is created as a separate stateful widget to manage
-  /// individual video player instances (each video needs its own player)
+
   Widget _buildVideoSection(String videoUrl) {
     return VideoPlayerWidget(videoUrl: videoUrl);
   }
   
-  /// Builds a placeholder when neither images nor videos are available
-  /// Shows an icon and message indicating no media was uploaded
   Widget _buildNoMediaPlaceholder() {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     
@@ -759,6 +739,13 @@ class _VideoPlayerWidgetState extends State<VideoPlayerWidget> {
   
   /// Whether the video is currently playing or paused
   bool _isPlaying = false;
+  
+  /// Whether the video is muted or has sound
+  bool _isMuted = true; // Start muted by default
+  
+  /// Show pause icon briefly when tapping center
+  bool _showPauseIcon = false;
+  Timer? _pauseIconTimer;
 
   @override
   void initState() {
@@ -769,13 +756,27 @@ class _VideoPlayerWidgetState extends State<VideoPlayerWidget> {
       Uri.parse(widget.videoUrl),
     );
     
+    // Set initial volume to 0 (muted)
+    _videoController.setVolume(0.0);
+    
     // Initialize the video and store the future for use in UI
     // This loads video metadata (duration, dimensions, etc)
-    _initializeVideoFuture = _videoController.initialize();
+    _initializeVideoFuture = _videoController.initialize().then((_) {
+      // Auto-play video after initialization
+      _videoController.play();
+      _videoController.setLooping(true); // Loop video
+      if (mounted) {
+        setState(() {
+          _isPlaying = true;
+        });
+      }
+    });
   }
 
   @override
   void dispose() {
+    // Cancel any pending timers
+    _pauseIconTimer?.cancel();
     // IMPORTANT: Always dispose the video controller
     // This stops playback, releases the video resources, and frees memory
     // Failure to dispose can lead to memory leaks and app crashes
@@ -783,52 +784,115 @@ class _VideoPlayerWidgetState extends State<VideoPlayerWidget> {
     super.dispose();
   }
 
+  void _togglePlayPause() {
+    setState(() {
+      if (_videoController.value.isPlaying) {
+        _videoController.pause();
+        _isPlaying = false;
+        _showPauseIcon = true;
+      } else {
+        _videoController.play();
+        _isPlaying = true;
+        _showPauseIcon = false;
+      }
+    });
+    
+    // Hide pause icon after 1 second if paused
+    if (!_isPlaying) {
+      _pauseIconTimer?.cancel();
+      _pauseIconTimer = Timer(const Duration(seconds: 1), () {
+        if (mounted) {
+          setState(() {
+            _showPauseIcon = false;
+          });
+        }
+      });
+    }
+  }
+
+  void _toggleMute() {
+    setState(() {
+      _isMuted = !_isMuted;
+      _videoController.setVolume(_isMuted ? 0.0 : 1.0);
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
+    final bgColor = isDark ? const Color.fromARGB(255, 50, 50, 50) : Colors.grey[300];
     
-    return Container(
-      color: isDark ? const Color.fromARGB(255, 50, 50, 50) : Colors.grey[300],
-      height: 400,
-      child: FutureBuilder<void>(
-        // Wait for video initialization before displaying
-        future: _initializeVideoFuture,
-        builder: (context, snapshot) {
-          if (snapshot.connectionState == ConnectionState.done) {
-            // Video is initialized and ready to display
-            return Stack(
+    return FutureBuilder<void>(
+      // Wait for video initialization before displaying
+      future: _initializeVideoFuture,
+      builder: (context, snapshot) {
+        if (snapshot.connectionState == ConnectionState.done) {
+          // Calculate container height based on video aspect ratio
+          final videoAspectRatio = _videoController.value.aspectRatio;
+          final maxWidth = MediaQuery.of(context).size.width;
+          final containerHeight = (maxWidth / videoAspectRatio).clamp(200.0, 600.0);
+          
+          // Video is initialized and ready to display
+          return Container(
+            color: bgColor,
+            height: containerHeight,
+            child: Stack(
               alignment: Alignment.center,
               children: [
                 // The actual video player widget
                 // Displays the video content with aspect ratio preservation
-                VideoPlayer(_videoController),
+                Center(
+                  child: AspectRatio(
+                    aspectRatio: videoAspectRatio,
+                    child: VideoPlayer(_videoController),
+                  ),
+                ),
                 
-                // Play/Pause button overlay
-                GestureDetector(
-                  onTap: () {
-                    setState(() {
-                      // Toggle between playing and paused
-                      if (_videoController.value.isPlaying) {
-                        _videoController.pause();
-                        _isPlaying = false;
-                      } else {
-                        _videoController.play();
-                        _isPlaying = true;
-                      }
-                    });
-                  },
-                  child: Container(
-                    // Semi-transparent background for button visibility
-                    decoration: BoxDecoration(
-                      color: Colors.black.withOpacity(_isPlaying ? 0 : 0.3),
-                      shape: BoxShape.circle,
+                // Center tap area for play/pause
+                Positioned.fill(
+                  child: GestureDetector(
+                    onTap: _togglePlayPause,
+                    behavior: HitTestBehavior.translucent,
+                    child: Container(
+                      color: Colors.transparent,
                     ),
-                    padding: const EdgeInsets.all(15),
-                    child: Icon(
-                      // Show play icon if paused, pause icon if playing
-                      _isPlaying ? Icons.pause : Icons.play_arrow,
-                      color: Colors.white,
-                      size: 50,
+                  ),
+                ),
+                
+                // Pause icon overlay (only shows when paused or briefly when pausing)
+                if (_showPauseIcon || !_isPlaying)
+                  IgnorePointer(
+                    child: Container(
+                      decoration: BoxDecoration(
+                        color: Colors.black.withOpacity(0.3),
+                        shape: BoxShape.circle,
+                      ),
+                      padding: const EdgeInsets.all(20),
+                      child: Icon(
+                        _isPlaying ? Icons.pause : Icons.play_arrow,
+                        color: Colors.white,
+                        size: 60,
+                      ),
+                    ),
+                  ),
+                
+                // Mute/Unmute button in top-right corner
+                Positioned(
+                  bottom: 10,
+                  right: 10,
+                  child: GestureDetector(
+                    onTap: _toggleMute,
+                    child: Container(
+                      padding: const EdgeInsets.all(8),
+                      decoration: BoxDecoration(
+                        color: Colors.black.withOpacity(0.6),
+                        shape: BoxShape.circle,
+                      ),
+                      child: Icon(
+                        _isMuted ? Icons.volume_off : Icons.volume_up,
+                        color: Colors.white,
+                        size: 24,
+                      ),
                     ),
                   ),
                 ),
@@ -850,10 +914,14 @@ class _VideoPlayerWidgetState extends State<VideoPlayerWidget> {
                   ),
                 ),
               ],
-            );
-          } else if (snapshot.hasError) {
-            // Show error message if video failed to load
-            return Center(
+            ),
+          );
+        } else if (snapshot.hasError) {
+          // Show error message if video failed to load
+          return Container(
+            color: bgColor,
+            height: 400,
+            child: Center(
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
@@ -871,20 +939,24 @@ class _VideoPlayerWidgetState extends State<VideoPlayerWidget> {
                   ),
                 ],
               ),
-            );
-          } else {
-            // Show loading indicator while video is initializing
-            return Center(
+            ),
+          );
+        } else {
+          // Show loading indicator while video is initializing
+          return Container(
+            color: bgColor,
+            height: 400,
+            child: Center(
               child: CircularProgressIndicator(
                 strokeWidth: 2,
                 valueColor: AlwaysStoppedAnimation<Color>(
                   isDark ? Colors.grey[400]! : Colors.grey[600]!,
                 ),
               ),
-            );
-          }
-        },
-      ),
+            ),
+          );
+        }
+      },
     );
   }
 }

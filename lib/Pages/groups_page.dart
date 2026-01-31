@@ -165,18 +165,6 @@ class _GroupsPageState extends State<GroupsPage> {
           print('Calling onCaptureBubbles with: $capturedPostIds');
           widget.onCaptureBubbles?.call(capturedPostIds);
           // Show feedback that posts are ready
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text('Ready to view ${capturedPostIds.length} posts in feed'),
-              duration: const Duration(seconds: 4),
-              action: SnackBarAction(
-                label: 'View Feed',
-                onPressed: () {
-                  print('🚀 Navigate to feed with: $capturedPostIds');
-                },
-              ),
-            ),
-          );
         } else {
           print('❌ No post IDs received or list was empty');
         }

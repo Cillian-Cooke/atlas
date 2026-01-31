@@ -292,15 +292,6 @@ class _GroupMapPageState extends State<GroupMapPage> with TickerProviderStateMix
     // Immediately pop with the captured post IDs (like HomePage)
     if (visiblePostIds.isNotEmpty) {
       Navigator.pop(context, visiblePostIds);
-    } else {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('No posts visible in current view'),
-          duration: Duration(seconds: 2),
-          behavior: SnackBarBehavior.floating,
-          margin: EdgeInsets.only(bottom: 100, left: 20, right: 20),
-        ),
-      );
     }
   }
 

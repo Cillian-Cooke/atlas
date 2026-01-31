@@ -125,15 +125,6 @@ class _HomeTabState extends State<HomeTab> {
     if (widget.onCapturePostIds != null) {
       widget.onCapturePostIds!(postIds);
     }
-    
-    if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Captured ${postIds.length} posts'),
-          duration: const Duration(seconds: 2),
-        ),
-      );
-    }
   }
 
   Future<void> _handleProfileMapTap() async {
@@ -167,19 +158,6 @@ class _HomeTabState extends State<HomeTab> {
         // Call both callbacks if provided
         widget.onCaptureBubbles?.call(capturedPostIds);
         widget.onCapturePostIds?.call(capturedPostIds);
-        
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Captured ${capturedPostIds.length} posts from ${result['userName']}'),
-            duration: const Duration(seconds: 3),
-            action: SnackBarAction(
-              label: 'View Feed',
-              onPressed: () {
-                print('🚀 Navigate to feed with: $capturedPostIds');
-              },
-            ),
-          ),
-        );
       } else {
         print('❌ No post IDs received or list was empty');
       }

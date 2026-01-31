@@ -130,13 +130,6 @@ class _GroupsTabState extends State<GroupsTab> {
 
       if (capturedPostIds != null && capturedPostIds.isNotEmpty && mounted) {
         widget.onCaptureBubbles?.call(capturedPostIds);
-        
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Captured ${capturedPostIds.length} posts from ${result['userName']}'),
-            duration: const Duration(seconds: 3),
-          ),
-        );
       }
     }
   }

@@ -157,31 +157,6 @@ class _CameraPageState extends State<CameraPage> {
       );
     }
   }
-  
-  /// Picks multiple images from the device's photo gallery
-  /// This allows users to select pre-existing photos instead of taking new ones
-  /// Works on iOS, Android, and Web
-  Future<void> _pickImages() async {
-    try {
-      // Open the native image picker to select multiple images from gallery
-      final List<XFile> images = await _picker.pickMultiImage(
-        imageQuality: 80, // Compress to 80% quality
-      );
-      
-      // Only update if user selected at least one image
-      if (images.isNotEmpty) {
-        setState(() {
-          // Replace currently selected images with newly selected ones
-          _selectedImages = images;
-        });
-      }
-    } catch (e) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text("Error picking images: $e")),
-      );
-    }
-  }
 
   /// Saves media (image or video) to the app's local gallery storage
   /// Creates 'atlas_gallery' folder in app documents directory
@@ -584,13 +559,6 @@ class _CameraPageState extends State<CameraPage> {
                       backgroundColor: Colors.red,
                     ),
 
-                    // Gallery button - Green
-                    FloatingActionButton.extended(
-                      onPressed: _pickImages,
-                      icon: const Icon(Icons.photo_library),
-                      label: const Text('Gallery'),
-                      backgroundColor: Colors.green,
-                    ),
                   ],
                 ),
                 const SizedBox(height: 15),
