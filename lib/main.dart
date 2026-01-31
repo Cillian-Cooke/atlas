@@ -19,7 +19,6 @@ import 'package:provider/provider.dart';
 import 'firebase_options.dart';
 
 
-
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
