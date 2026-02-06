@@ -4,14 +4,13 @@ class LabeledBox extends StatefulWidget {
   final String title;
   final String value;
   final Color backgroundColor;
-  final int maxLength; // Maximum characters before showing "Read more"
-
+  final int maxLength;
   const LabeledBox({
     super.key,
     required this.title,
     required this.value,
     this.backgroundColor = Colors.white,
-    this.maxLength = 150, // Default to 150 characters
+    this.maxLength = 80,
   });
 
   @override

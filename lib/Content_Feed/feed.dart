@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../Widgets/icon_button.dart';
 import 'post_feed.dart';
 
 class FeedTab extends StatelessWidget {
@@ -8,9 +9,23 @@ class FeedTab extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return PostFeedPage(
-      title: 'Content Feed',
-      capturedBubbles: capturedBubbles,
+    return Stack(
+      children: [ 
+        PostFeedPage(
+        title: 'Content Feed',
+        capturedBubbles: capturedBubbles,
+        ),
+        // Positioned(
+        //   bottom: 65,
+        //   right: 8,
+        //     child: IconButtonWidget(
+        //       icon: Icons.back_hand_sharp,
+        //       onPressed: () {
+        //       },
+        //       buttonSize: 70,
+        //     ),
+        //   ),
+      ]
     );
   }
 }

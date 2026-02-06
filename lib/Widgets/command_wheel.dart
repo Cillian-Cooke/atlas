@@ -271,16 +271,10 @@ class WheelPainter extends CustomPainter {
       center.dy + innerRadius * math.sin(startAngle + sweepAngle),
     );
 
-    final outerEndPoint = Offset(
-      center.dx + outerRadius * math.cos(startAngle + sweepAngle),
-      center.dy + outerRadius * math.sin(startAngle + sweepAngle),
-    );
-
     // Start path
     path.moveTo(innerStartPoint.dx, innerStartPoint.dy);
 
     // Smooth curved transition from inner to outer edge (start side)
-    final startMidRadius = (innerRadius + outerRadius) / 2;
     final startControl1 = Offset(
       center.dx + (innerRadius + cornerRadius) * math.cos(startAngle),
       center.dy + (innerRadius + cornerRadius) * math.sin(startAngle),

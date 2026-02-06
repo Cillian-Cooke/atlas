@@ -89,7 +89,7 @@ class HomePageState extends State<HomePage> with TickerProviderStateMixin {
 
         // If no labels found, use default
         if (loadedLabels.isEmpty) {
-          loadedLabels = ["cillianCooke", "Barra", "football", "yellow"];
+          loadedLabels = ["DoubleClick to View Posts"];
         }
 
         setState(() {
@@ -106,7 +106,7 @@ class HomePageState extends State<HomePage> with TickerProviderStateMixin {
       // Use default labels on error
       if (mounted) {
         setState(() {
-          labelNames = ["cillianCooke", "Barra", "football", "yellow"];
+          labelNames = ["DoubleClick to View Posts"];
           _isLoadingLabels = false;
         });
         _setupLabels();

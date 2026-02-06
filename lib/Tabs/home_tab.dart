@@ -3,7 +3,6 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:provider/provider.dart';
 import '../Pages/home_page.dart';
-import '../Pages/login_page.dart';
 import '../PopUps/edit/filter_map_popup.dart';
 import '../PopUps/map_menu_popup.dart';
 import '../Widgets/icon_button.dart';
@@ -114,10 +113,6 @@ class _HomeTabState extends State<HomeTab> {
         });
       }
     }
-  }
-
-  static void _emptyCallback() {
-    // Empty callback for LoginScreen navigation
   }
 
   void _handleCapturePostIds(List<String> postIds) {

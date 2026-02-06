@@ -8,6 +8,7 @@ import '../Widgets/description_box.dart';
 import '../PopUps/map_menu_popup.dart';
 import '../Widgets/profile_header.dart';
 import '../Map_And_Bubbles/user_map_page.dart';
+import '../PopUps/comment_section_popup.dart';
 
 class PostFeedPage extends StatefulWidget {
   final String title;
@@ -86,6 +87,19 @@ class _FeedPageState extends State<PostFeedPage> {
         print('❌ No post IDs received or list was empty');
       }
     }
+  }
+
+  /// Open comment section popup
+  void _openCommentSection(String postId, String postOwnerId) {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (context) => CommentSectionPopup(
+        postId: postId,
+        postOwnerId: postOwnerId,
+      ),
+    );
   }
 
   /// Toggle like on a post
@@ -370,9 +384,7 @@ class _FeedPageState extends State<PostFeedPage> {
                       children: [
                         IconButton(
                           icon: Icon(Icons.comment_outlined, color: isDark ? Colors.white : Colors.black),
-                          onPressed: () {
-                            setState(() {});
-                          },
+                          onPressed: () => _openCommentSection(postId, userID),
                         ),
                         Text(_formatCount(commentsCount), style: TextStyle(color: isDark ? Colors.white : Colors.black)),
                       ],
