@@ -46,7 +46,7 @@ List<Widget> buildLabelWidgets(
   const baseHPad = 12.0;
   const baseVPad = 6.0;
 
-  final visualScale = 1 / zoom; // inverse scaling: bigger when zoomed out
+  final visualScale = 1 / zoom;
   final isDark = Theme.of(context).brightness == Brightness.dark;
   final labelBgColor = isDark 
       ? Colors.white.withOpacity(0.2) 
@@ -62,7 +62,6 @@ List<Widget> buildLabelWidgets(
       child: FractionalTranslation(
         translation: const Offset(-0.5, -0.5),
         child: GestureDetector(
-          // ← follow cursor 1:1, independent of zoom
           onPanUpdate: (d) => onDrag(i, label.position + d.delta),
           child: Container(
             padding: EdgeInsets.symmetric(

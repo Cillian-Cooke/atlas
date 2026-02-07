@@ -27,6 +27,31 @@ class PostFeedPage extends StatefulWidget {
 class _FeedPageState extends State<PostFeedPage> {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
   final FirebaseAuth _auth = FirebaseAuth.instance;
+  final ScrollController _scrollController = ScrollController();
+  
+  // ========== CONFIGURABLE SETTINGS ==========
+  // Default aspect ratio for preloading posts (width:height)
+  // Examples:
+  //   1.0 = Square (1:1) - Instagram style
+  //   0.75 = Portrait (3:4) - Taller
+  //   1.33 = Landscape (4:3) - Wider
+  //   1.77 = Widescreen (16:9)
+  static const double defaultAspectRatio = 1.0;
+  
+  // Cache extent: Distance in pixels ahead/behind the viewport where posts are loaded
+  // Examples:
+  //   250.0 = Very close (loads just before visible) - smoother scrolling
+  //   500.0 = Medium distance (default Flutter value)
+  //   1000.0 = Far ahead (loads well before visible) - may cause more jank
+  //   2000.0 = Very far (loads many posts ahead) - heavier memory usage
+  static const double cacheExtent = 1000.0;
+  // ==========================================
+  
+  @override
+  void dispose() {
+    _scrollController.dispose();
+    super.dispose();
+  }
 
   Future<List<DocumentSnapshot>> _fetchCapturedPosts(List<String> postIds) async {
     if (postIds.isEmpty) return [];
@@ -217,6 +242,12 @@ class _FeedPageState extends State<PostFeedPage> {
                     }
 
                     return ListView.builder(
+                      controller: _scrollController,
+                      physics: const ClampingScrollPhysics(),
+                      cacheExtent: cacheExtent,
+                      addAutomaticKeepAlives: true,
+                      addRepaintBoundaries: true,
+                      addSemanticIndexes: false,
                       itemCount: snapshot.data!.length,
                       itemBuilder: (context, index) {
                         var doc = snapshot.data![index];
@@ -250,6 +281,12 @@ class _FeedPageState extends State<PostFeedPage> {
         }
 
         return ListView.builder(
+          controller: _scrollController,
+          physics: const ClampingScrollPhysics(),
+          cacheExtent: cacheExtent,
+          addAutomaticKeepAlives: true,
+          addRepaintBoundaries: true,
+          addSemanticIndexes: false,
           itemCount: snapshot.data!.docs.length,
           itemBuilder: (context, index) {
             var doc = snapshot.data!.docs[index];
@@ -278,179 +315,182 @@ class _FeedPageState extends State<PostFeedPage> {
         ? _formatDate(createdAt.toDate())
         : 'Unknown Date';
 
-    return Container(
-      margin: const EdgeInsets.fromLTRB(0, 0, 0, 10),
-      decoration: BoxDecoration(
-        color: isDark ? const Color.fromARGB(255, 30, 30, 30) : Colors.white,
-        boxShadow: [
-          BoxShadow(
-            color: isDark ? Colors.black45 : const Color.fromARGB(255, 87, 87, 87),
-            blurRadius: 7,
-            offset: Offset(0, 3),
-          ),
-        ],
-      ),
-      child: Column(
-        children: [
-          // User header
-          SizedBox(
-            height: 60,
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              crossAxisAlignment: CrossAxisAlignment.center,
-              children: [
-                ProfileHeaderWidget(
-                  header: username,
-                  subheading: dateString,
-                  onTap: () => _handleUserProfileTap(userID),
-                ),
-                IconButton(
-                  icon: const Icon(Icons.more_horiz),
-                  iconSize: 40,
-                  padding: const EdgeInsets.fromLTRB(0, 10, 10, 10),
-                  onPressed: () {
-                    setState(() {});
-                  },
-                ),
-              ],
+    return RepaintBoundary(
+      key: ValueKey(postId), // Unique key to maintain widget identity
+      child: Container(
+        margin: const EdgeInsets.fromLTRB(0, 0, 0, 10),
+        decoration: BoxDecoration(
+          color: isDark ? const Color.fromARGB(255, 30, 30, 30) : Colors.white,
+          boxShadow: [
+            BoxShadow(
+              color: isDark ? Colors.black45 : const Color.fromARGB(255, 87, 87, 87),
+              blurRadius: 7,
+              offset: Offset(0, 3),
             ),
-          ),
-          
-          // Media section - handles both images and videos with double-tap to like
-          if (videoUrl != null && videoUrl.isNotEmpty)
-            // Display video if one exists
-            _buildVideoSection(videoUrl, postId)
-          else if (imageUrls.isNotEmpty)
-            // Display images if no video, but images exist
-            _buildImageSection(imageUrls, postId)
-          else
-            // Display placeholder if neither video nor images
-            _buildNoMediaPlaceholder(),
-          
-          // Tags
-          if (tags.isNotEmpty)
-            SingleChildScrollView(
-              scrollDirection: Axis.horizontal,
+          ],
+        ),
+        child: Column(
+          children: [
+            // User header
+            SizedBox(
+              height: 60,
               child: Row(
-                children: tags.map((tag) {
-                  final isDark = Theme.of(context).brightness == Brightness.dark;
-                  return Container(
-                    margin: EdgeInsets.all(5),
-                    padding: EdgeInsets.all(3),
-                    decoration: BoxDecoration(
-                      borderRadius: BorderRadius.circular(20),
-                      color: _getTagColor(tag.toString()),
-                    ),
-                    child: Text(
-                      '#$tag',
-                      style: TextStyle(
-                        fontSize: 12,
-                        fontWeight: FontWeight.bold,
-                        color: isDark ? Colors.white : Colors.black,
-                      ),
-                    ),
-                  );
-                }).toList(),
-              ),
-            ),
-          // Likes + Comments Row with real-time like status
-          StreamBuilder<bool>(
-            stream: _isPostLikedStream(postId),
-            builder: (context, likeSnapshot) {
-              final isLiked = likeSnapshot.data ?? false;
-              
-              return Row(
-                mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                crossAxisAlignment: CrossAxisAlignment.center,
                 children: [
-                  SizedBox(
-                    child: Row(
-                      children: [
-                        IconButton(
-                          icon: Icon(
-                            isLiked ? Icons.favorite : Icons.favorite_border,
-                            color: isLiked ? Colors.red : (isDark ? Colors.white : Colors.black),
-                          ),
-                          onPressed: () => _toggleLike(postId, isLiked),
-                        ),
-                        Text(
-                          _formatCount(likesCount),
-                          style: TextStyle(color: isDark ? Colors.white : Colors.black),
-                        ),
-                      ],
-                    ),
+                  ProfileHeaderWidget(
+                    header: username,
+                    subheading: dateString,
+                    onTap: () => _handleUserProfileTap(userID),
                   ),
-                  SizedBox(
-                    child: Row(
-                      children: [
-                        IconButton(
-                          icon: Icon(Icons.comment_outlined, color: isDark ? Colors.white : Colors.black),
-                          onPressed: () => _openCommentSection(postId, userID),
-                        ),
-                        Text(_formatCount(commentsCount), style: TextStyle(color: isDark ? Colors.white : Colors.black)),
-                      ],
-                    ),
-                  ),
-                  SizedBox(
-                    child: Row(
-                      children: [
-                        IconButton(
-                          icon: Icon(Icons.upload, color: isDark ? Colors.white : Colors.black),
-                          onPressed: () {
-                            setState(() {});
-                          },
-                        ),
-                        Text("Share", style: TextStyle(color: isDark ? Colors.white : Colors.black)),
-                      ],
-                    ),
-                  ),
-                  SizedBox(
-                    child: Row(
-                      children: [
-                        IconButton(
-                          icon: Icon(Icons.report_outlined, color: isDark ? Colors.white : Colors.black),
-                          onPressed: () {
-                            setState(() {});
-                          },
-                        ),
-                      ],
-                    ),
+                  IconButton(
+                    icon: const Icon(Icons.more_horiz),
+                    iconSize: 40,
+                    padding: const EdgeInsets.fromLTRB(0, 10, 10, 10),
+                    onPressed: () {
+                      setState(() {});
+                    },
                   ),
                 ],
-              );
-            },
-          ),
-          SizedBox(height: 10),
-          // Description
-          if (description.isNotEmpty)
-            Container(
-              padding: EdgeInsets.all(10),
-              child: LabeledBox(
-                title: "Description",
-                value: description,
               ),
             ),
-          // Support button
-          Center(
-            child: ElevatedButton(
-              onPressed: () {},
-              style: ElevatedButton.styleFrom(
-                elevation: 10,
-                backgroundColor: Colors.lightBlueAccent,
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(20),
+            
+            // Media section - handles both images and videos with double-tap to like
+            if (videoUrl != null && videoUrl.isNotEmpty)
+              // Display video if one exists
+              _buildVideoSection(videoUrl, postId)
+            else if (imageUrls.isNotEmpty)
+              // Display images if no video, but images exist
+              _buildImageSection(imageUrls, postId)
+            else
+              // Display placeholder if neither video nor images
+              _buildNoMediaPlaceholder(),
+            
+            // Tags
+            if (tags.isNotEmpty)
+              SingleChildScrollView(
+                scrollDirection: Axis.horizontal,
+                child: Row(
+                  children: tags.map((tag) {
+                    final isDark = Theme.of(context).brightness == Brightness.dark;
+                    return Container(
+                      margin: EdgeInsets.all(5),
+                      padding: EdgeInsets.all(3),
+                      decoration: BoxDecoration(
+                        borderRadius: BorderRadius.circular(20),
+                        color: _getTagColor(tag.toString()),
+                      ),
+                      child: Text(
+                        '#$tag',
+                        style: TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.bold,
+                          color: isDark ? Colors.white : Colors.black,
+                        ),
+                      ),
+                    );
+                  }).toList(),
                 ),
               ),
-              child: Text(
-                "Support Creator",
-                style: TextStyle(
-                  color: isDark ? Colors.lightBlueAccent : const Color.fromARGB(255, 0, 0, 0),
-                  fontWeight: FontWeight.bold,
+            // Likes + Comments Row with real-time like status
+            StreamBuilder<bool>(
+              stream: _isPostLikedStream(postId),
+              builder: (context, likeSnapshot) {
+                final isLiked = likeSnapshot.data ?? false;
+                
+                return Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                  children: [
+                    SizedBox(
+                      child: Row(
+                        children: [
+                          IconButton(
+                            icon: Icon(
+                              isLiked ? Icons.favorite : Icons.favorite_border,
+                              color: isLiked ? Colors.red : (isDark ? Colors.white : Colors.black),
+                            ),
+                            onPressed: () => _toggleLike(postId, isLiked),
+                          ),
+                          Text(
+                            _formatCount(likesCount),
+                            style: TextStyle(color: isDark ? Colors.white : Colors.black),
+                          ),
+                        ],
+                      ),
+                    ),
+                    SizedBox(
+                      child: Row(
+                        children: [
+                          IconButton(
+                            icon: Icon(Icons.comment_outlined, color: isDark ? Colors.white : Colors.black),
+                            onPressed: () => _openCommentSection(postId, userID),
+                          ),
+                          Text(_formatCount(commentsCount), style: TextStyle(color: isDark ? Colors.white : Colors.black)),
+                        ],
+                      ),
+                    ),
+                    SizedBox(
+                      child: Row(
+                        children: [
+                          IconButton(
+                            icon: Icon(Icons.upload, color: isDark ? Colors.white : Colors.black),
+                            onPressed: () {
+                              setState(() {});
+                            },
+                          ),
+                          Text("Share", style: TextStyle(color: isDark ? Colors.white : Colors.black)),
+                        ],
+                      ),
+                    ),
+                    SizedBox(
+                      child: Row(
+                        children: [
+                          IconButton(
+                            icon: Icon(Icons.report_outlined, color: isDark ? Colors.white : Colors.black),
+                            onPressed: () {
+                              setState(() {});
+                            },
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                );
+              },
+            ),
+            SizedBox(height: 10),
+            // Description
+            if (description.isNotEmpty)
+              Container(
+                padding: EdgeInsets.all(10),
+                child: LabeledBox(
+                  title: "Description",
+                  value: description,
+                ),
+              ),
+            // Support button
+            Center(
+              child: ElevatedButton(
+                onPressed: () {},
+                style: ElevatedButton.styleFrom(
+                  elevation: 10,
+                  backgroundColor: Colors.lightBlueAccent,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(20),
+                  ),
+                ),
+                child: Text(
+                  "Support Creator",
+                  style: TextStyle(
+                    color: isDark ? Colors.lightBlueAccent : const Color.fromARGB(255, 0, 0, 0),
+                    fontWeight: FontWeight.bold,
+                  ),
                 ),
               ),
             ),
-          ),
-          SizedBox(height: 16),
-        ],
+            SizedBox(height: 16),
+          ],
+        ),
       ),
     );
   }
@@ -540,58 +580,69 @@ class _FeedPageState extends State<PostFeedPage> {
   Widget _buildSingleImage(String imageUrl, String postId) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final bgColor = isDark ? const Color.fromARGB(255, 50, 50, 50) : Colors.grey[300];
+    final maxWidth = MediaQuery.of(context).size.width;
+    // Calculate expected height based on default aspect ratio
+    final expectedHeight = maxWidth / defaultAspectRatio;
     
-    return FutureBuilder<Size?>(
-      future: _getImageDimensions(imageUrl),
-      builder: (context, snapshot) {
-        // Default height if dimensions can't be determined
-        double containerHeight = 400;
-        
-        if (snapshot.hasData && snapshot.data != null) {
-          // Calculate height based on actual image dimensions while maintaining aspect ratio
-          // Max width is constrained by screen width
-          final maxWidth = MediaQuery.of(context).size.width;
-          final aspectRatio = snapshot.data!.width / snapshot.data!.height;
-          containerHeight = (maxWidth / aspectRatio).clamp(200.0, 600.0);
-        }
-        
-        return GestureDetector(
-          onDoubleTap: () async {
-            // Check if already liked
-            final currentUser = _auth.currentUser;
-            if (currentUser == null) return;
+    return SizedBox(
+      height: expectedHeight,
+      child: GestureDetector(
+        onDoubleTap: () async {
+          // Check if already liked
+          final currentUser = _auth.currentUser;
+          if (currentUser == null) return;
+          
+          final likeDoc = await _firestore
+              .collection('posts')
+              .doc(postId)
+              .collection('likes')
+              .doc(currentUser.uid)
+              .get();
+          
+          final isLiked = likeDoc.exists;
+          
+          // Only like if not already liked
+          if (!isLiked) {
+            await _toggleLike(postId, false);
             
-            final likeDoc = await _firestore
-                .collection('posts')
-                .doc(postId)
-                .collection('likes')
-                .doc(currentUser.uid)
-                .get();
-            
-            final isLiked = likeDoc.exists;
-            
-            // Only like if not already liked
-            if (!isLiked) {
-              await _toggleLike(postId, false);
-              
-              // Show heart animation
-              _showHeartAnimation(context);
-            }
-          },
-          child: Container(
-            height: containerHeight,
-            color: bgColor,
-            child: CachedNetworkImage(
-              imageUrl: imageUrl,
-              fit: BoxFit.contain,
-              width: double.infinity,
-              placeholder: (context, url) => Container(
+            // Show heart animation
+            _showHeartAnimation(context);
+          }
+        },
+        child: Container(
+          width: maxWidth,
+          color: bgColor,
+          child: CachedNetworkImage(
+            imageUrl: imageUrl,
+            fit: BoxFit.contain,
+            width: double.infinity,
+            // Prevent layout shifts by maintaining size during load
+            memCacheWidth: maxWidth.toInt(),
+            fadeInDuration: Duration.zero,
+            fadeOutDuration: Duration.zero,
+            placeholderFadeInDuration: Duration.zero,
+            // Use imageBuilder to wrap in AspectRatio based on actual image dimensions
+            imageBuilder: (context, imageProvider) {
+              return Image(
+                image: imageProvider,
+                fit: BoxFit.contain,
+                width: double.infinity,
+                // Disable gapless playback to prevent layout shifts
+                gaplessPlayback: false,
+              );
+            },
+            placeholder: (context, url) => AspectRatio(
+              aspectRatio: defaultAspectRatio,
+              child: Container(
                 color: bgColor,
                 child: const Center(
                   child: CircularProgressIndicator(strokeWidth: 2),
                 ),
               ),
-              errorWidget: (context, url, error) => Container(
+            ),
+            errorWidget: (context, url, error) => AspectRatio(
+              aspectRatio: defaultAspectRatio,
+              child: Container(
                 color: bgColor,
                 child: Center(
                   child: Column(
@@ -609,8 +660,8 @@ class _FeedPageState extends State<PostFeedPage> {
               ),
             ),
           ),
-        );
-      },
+        ),
+      ),
     );
   }
   
@@ -648,25 +699,6 @@ class _FeedPageState extends State<PostFeedPage> {
     );
     
     overlay.insert(overlayEntry);
-  }
-  
-  /// Get image dimensions from URL
-  Future<Size?> _getImageDimensions(String imageUrl) async {
-    try {
-      final image = NetworkImage(imageUrl);
-      final completer = Completer<Size>();
-      image.resolve(const ImageConfiguration()).addListener(
-        ImageStreamListener((image, synchronousCall) {
-          final myImage = image.image;
-          Size size = Size(myImage.width.toDouble(), myImage.height.toDouble());
-          completer.complete(size);
-        }),
-      );
-      return completer.future;
-    } catch (e) {
-      debugPrint('Error getting image dimensions: $e');
-      return null;
-    }
   }
 
   Widget _buildImageCarousel(List<dynamic> imageUrls, String postId) {
@@ -760,49 +792,11 @@ class ImageCarousel extends StatefulWidget {
 class _ImageCarouselState extends State<ImageCarousel> {
   late PageController _pageController;
   int _currentPage = 0;
-  late List<Size?> _imageDimensions;
 
   @override
   void initState() {
     super.initState();
     _pageController = PageController();
-    // Preload all image dimensions
-    _imageDimensions = List.filled(widget.imageUrls.length, null);
-    _preloadImageDimensions();
-  }
-
-  Future<void> _preloadImageDimensions() async {
-    for (int i = 0; i < widget.imageUrls.length; i++) {
-      try {
-        final dimensions = await _getImageDimensions(widget.imageUrls[i].toString());
-        if (mounted) {
-          setState(() {
-            _imageDimensions[i] = dimensions;
-          });
-        }
-      } catch (e) {
-        debugPrint('Error loading image dimensions for image $i: $e');
-      }
-    }
-  }
-
-  Future<Size?> _getImageDimensions(String imageUrl) async {
-    try {
-      final image = NetworkImage(imageUrl);
-      final completer = Completer<Size>();
-      image.resolve(const ImageConfiguration()).addListener(
-        ImageStreamListener((image, synchronousCall) {
-          final myImage = image.image;
-          Size size = Size(myImage.width.toDouble(), myImage.height.toDouble());
-          if (!completer.isCompleted) {
-            completer.complete(size);
-          }
-        }),
-      );
-      return completer.future;
-    } catch (e) {
-      return null;
-    }
   }
 
   @override
@@ -815,111 +809,117 @@ class _ImageCarouselState extends State<ImageCarousel> {
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final bgColor = isDark ? const Color.fromARGB(255, 50, 50, 50) : Colors.grey[300];
+    final maxWidth = MediaQuery.of(context).size.width;
+    final expectedHeight = maxWidth / _FeedPageState.defaultAspectRatio;
     
-    // Get dimensions of current image
-    Size? currentDimensions = _imageDimensions[_currentPage];
-    double containerHeight = 400;
-    
-    if (currentDimensions != null) {
-      final maxWidth = MediaQuery.of(context).size.width;
-      final aspectRatio = currentDimensions.width / currentDimensions.height;
-      containerHeight = (maxWidth / aspectRatio).clamp(200.0, 600.0);
-    }
-    
-    return AnimatedContainer(
-      duration: const Duration(milliseconds: 300),
-      height: containerHeight,
-      color: bgColor,
-      child: Stack(
-        children: [
-          // Image PageView with double-tap support
-          GestureDetector(
-            onDoubleTap: widget.onDoubleTap,
-            child: PageView.builder(
-              controller: _pageController,
-              onPageChanged: (index) {
-                setState(() {
-                  _currentPage = index;
-                });
-              },
-              itemCount: widget.imageUrls.length,
-              itemBuilder: (context, index) {
-                return CachedNetworkImage(
-                  imageUrl: widget.imageUrls[index].toString(),
-                  fit: BoxFit.contain,
-                  placeholder: (context, url) => Container(
-                    color: bgColor,
-                    child: const Center(
-                      child: CircularProgressIndicator(strokeWidth: 2),
-                    ),
-                  ),
-                  errorWidget: (context, url, error) => Container(
-                    color: bgColor,
-                    child: Center(
-                      child: Column(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          Icon(Icons.broken_image, size: 60, color: isDark ? Colors.grey[400] : Colors.grey[600]),
-                          const SizedBox(height: 10),
-                          Text(
-                            'Failed to load image',
-                            style: TextStyle(color: isDark ? Colors.grey[400] : Colors.grey[600]),
-                          ),
-                        ],
+    return SizedBox(
+      height: expectedHeight,
+      child: Container(
+        color: bgColor,
+        child: AspectRatio(
+          aspectRatio: _FeedPageState.defaultAspectRatio,
+          child: Stack(
+          children: [
+            // Image PageView with double-tap support
+            GestureDetector(
+              onDoubleTap: widget.onDoubleTap,
+              child: PageView.builder(
+                controller: _pageController,
+                onPageChanged: (index) {
+                  setState(() {
+                    _currentPage = index;
+                  });
+                },
+                itemCount: widget.imageUrls.length,
+                itemBuilder: (context, index) {
+                  return CachedNetworkImage(
+                    imageUrl: widget.imageUrls[index].toString(),
+                    fit: BoxFit.contain,
+                    fadeInDuration: Duration.zero,
+                    fadeOutDuration: Duration.zero,
+                    placeholderFadeInDuration: Duration.zero,
+                    imageBuilder: (context, imageProvider) {
+                      return Image(
+                        image: imageProvider,
+                        fit: BoxFit.contain,
+                        gaplessPlayback: false,
+                      );
+                    },
+                    placeholder: (context, url) => Container(
+                      color: bgColor,
+                      child: const Center(
+                        child: CircularProgressIndicator(strokeWidth: 2),
                       ),
                     ),
-                  ),
-                );
-              },
+                    errorWidget: (context, url, error) => Container(
+                      color: bgColor,
+                      child: Center(
+                        child: Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Icon(Icons.broken_image, size: 60, color: isDark ? Colors.grey[400] : Colors.grey[600]),
+                            const SizedBox(height: 10),
+                            Text(
+                              'Failed to load image',
+                              style: TextStyle(color: isDark ? Colors.grey[400] : Colors.grey[600]),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  );
+                },
+              ),
             ),
-          ),
-          
-          // Page indicators (dots)
-          Positioned(
-            bottom: 10,
-            left: 0,
-            right: 0,
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: List.generate(
-                widget.imageUrls.length,
-                (index) => Container(
-                  margin: const EdgeInsets.symmetric(horizontal: 3),
-                  width: 6,
-                  height: 6,
-                  decoration: BoxDecoration(
-                    shape: BoxShape.circle,
-                    color: _currentPage == index
-                        ? Colors.white
-                        : Colors.white.withOpacity(0.4),
+            
+            // Page indicators (dots)
+            Positioned(
+              bottom: 10,
+              left: 0,
+              right: 0,
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: List.generate(
+                  widget.imageUrls.length,
+                  (index) => Container(
+                    margin: const EdgeInsets.symmetric(horizontal: 3),
+                    width: 6,
+                    height: 6,
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      color: _currentPage == index
+                          ? Colors.white
+                          : Colors.white.withOpacity(0.4),
+                    ),
                   ),
                 ),
               ),
             ),
-          ),
-          
-          // Page counter (top right)
-          Positioned(
-            top: 10,
-            right: 10,
-            child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-              decoration: BoxDecoration(
-                color: Colors.black.withOpacity(0.6),
-                borderRadius: BorderRadius.circular(12),
-              ),
-              child: Text(
-                '${_currentPage + 1}/${widget.imageUrls.length}',
-                style: const TextStyle(
-                  color: Colors.white,
-                  fontSize: 12,
-                  fontWeight: FontWeight.bold,
+            
+            // Page counter (top right)
+            Positioned(
+              top: 10,
+              right: 10,
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                decoration: BoxDecoration(
+                  color: Colors.black.withOpacity(0.6),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Text(
+                  '${_currentPage + 1}/${widget.imageUrls.length}',
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 12,
+                    fontWeight: FontWeight.bold,
+                  ),
                 ),
               ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
+    ),
     );
   }
 }
@@ -1018,123 +1018,127 @@ class _VideoPlayerWidgetState extends State<VideoPlayerWidget> {
       builder: (context, snapshot) {
         if (snapshot.connectionState == ConnectionState.done) {
           final videoAspectRatio = _videoController.value.aspectRatio;
-          final maxWidth = MediaQuery.of(context).size.width;
-          final containerHeight = (maxWidth / videoAspectRatio).clamp(200.0, 600.0);
           
           return Container(
             color: bgColor,
-            height: containerHeight,
-            child: Stack(
-              alignment: Alignment.center,
-              children: [
-                Center(
-                  child: AspectRatio(
-                    aspectRatio: videoAspectRatio,
-                    child: VideoPlayer(_videoController),
-                  ),
-                ),
-                
-                // Double-tap and single-tap detector
-                Positioned.fill(
-                  child: GestureDetector(
-                    onTap: _togglePlayPause,
-                    onDoubleTap: widget.onDoubleTap,
-                    behavior: HitTestBehavior.translucent,
-                    child: Container(
-                      color: Colors.transparent,
-                    ),
-                  ),
-                ),
-                
-                // Pause icon overlay
-                if (_showPauseIcon || !_isPlaying)
-                  IgnorePointer(
-                    child: Container(
-                      decoration: BoxDecoration(
-                        color: Colors.black.withOpacity(0.3),
-                        shape: BoxShape.circle,
-                      ),
-                      padding: const EdgeInsets.all(20),
-                      child: Icon(
-                        _isPlaying ? Icons.pause : Icons.play_arrow,
-                        color: Colors.white,
-                        size: 60,
-                      ),
-                    ),
-                  ),
-                
-                // Mute/Unmute button
-                Positioned(
-                  bottom: 10,
-                  right: 10,
-                  child: GestureDetector(
-                    onTap: _toggleMute,
-                    child: Container(
-                      padding: const EdgeInsets.all(8),
-                      decoration: BoxDecoration(
-                        color: Colors.black.withOpacity(0.6),
-                        shape: BoxShape.circle,
-                      ),
-                      child: Icon(
-                        _isMuted ? Icons.volume_off : Icons.volume_up,
-                        color: Colors.white,
-                        size: 24,
-                      ),
-                    ),
-                  ),
-                ),
-                
-                // Video progress bar
-                Positioned(
-                  bottom: 0,
-                  left: 0,
-                  right: 0,
-                  child: VideoProgressIndicator(
-                    _videoController,
-                    allowScrubbing: true,
-                    colors: const VideoProgressColors(
-                      playedColor: Colors.blue,
-                      bufferedColor: Colors.grey,
-                      backgroundColor: Colors.grey,
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          );
-        } else if (snapshot.hasError) {
-          return Container(
-            color: bgColor,
-            height: 400,
-            child: Center(
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
+            child: AspectRatio(
+              aspectRatio: videoAspectRatio,
+              child: Stack(
+                alignment: Alignment.center,
                 children: [
-                  Icon(
-                    Icons.error_outline,
-                    size: 60,
-                    color: isDark ? Colors.grey[400] : Colors.grey[600],
+                  Center(
+                    child: AspectRatio(
+                      aspectRatio: videoAspectRatio,
+                      child: VideoPlayer(_videoController),
+                    ),
                   ),
-                  const SizedBox(height: 10),
-                  Text(
-                    'Failed to load video',
-                    style: TextStyle(
-                      color: isDark ? Colors.grey[400] : Colors.grey[600],
+                  
+                  // Double-tap and single-tap detector
+                  Positioned.fill(
+                    child: GestureDetector(
+                      onTap: _togglePlayPause,
+                      onDoubleTap: widget.onDoubleTap,
+                      behavior: HitTestBehavior.translucent,
+                      child: Container(
+                        color: Colors.transparent,
+                      ),
+                    ),
+                  ),
+                  
+                  // Pause icon overlay
+                  if (_showPauseIcon || !_isPlaying)
+                    IgnorePointer(
+                      child: Container(
+                        decoration: BoxDecoration(
+                          color: Colors.black.withOpacity(0.3),
+                          shape: BoxShape.circle,
+                        ),
+                        padding: const EdgeInsets.all(20),
+                        child: Icon(
+                          _isPlaying ? Icons.pause : Icons.play_arrow,
+                          color: Colors.white,
+                          size: 60,
+                        ),
+                      ),
+                    ),
+                  
+                  // Mute/Unmute button
+                  Positioned(
+                    bottom: 10,
+                    right: 10,
+                    child: GestureDetector(
+                      onTap: _toggleMute,
+                      child: Container(
+                        padding: const EdgeInsets.all(8),
+                        decoration: BoxDecoration(
+                          color: Colors.black.withOpacity(0.6),
+                          shape: BoxShape.circle,
+                        ),
+                        child: Icon(
+                          _isMuted ? Icons.volume_off : Icons.volume_up,
+                          color: Colors.white,
+                          size: 24,
+                        ),
+                      ),
+                    ),
+                  ),
+                  
+                  // Video progress bar
+                  Positioned(
+                    bottom: 0,
+                    left: 0,
+                    right: 0,
+                    child: VideoProgressIndicator(
+                      _videoController,
+                      allowScrubbing: true,
+                      colors: const VideoProgressColors(
+                        playedColor: Colors.blue,
+                        bufferedColor: Colors.grey,
+                        backgroundColor: Colors.grey,
+                      ),
                     ),
                   ),
                 ],
               ),
             ),
           );
+        } else if (snapshot.hasError) {
+          return AspectRatio(
+            aspectRatio: _FeedPageState.defaultAspectRatio,
+            child: Container(
+              color: bgColor,
+              child: Center(
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Icon(
+                      Icons.error_outline,
+                      size: 60,
+                      color: isDark ? Colors.grey[400] : Colors.grey[600],
+                    ),
+                    const SizedBox(height: 10),
+                    Text(
+                      'Failed to load video',
+                      style: TextStyle(
+                        color: isDark ? Colors.grey[400] : Colors.grey[600],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          );
         } else {
-          return Container(
-            color: bgColor,
-            height: 400,
-            child: Center(
-              child: CircularProgressIndicator(
-                strokeWidth: 2,
-                valueColor: AlwaysStoppedAnimation<Color>(
-                  isDark ? Colors.grey[400]! : Colors.grey[600]!,
+          return AspectRatio(
+            aspectRatio: _FeedPageState.defaultAspectRatio,
+            child: Container(
+              color: bgColor,
+              child: Center(
+                child: CircularProgressIndicator(
+                  strokeWidth: 2,
+                  valueColor: AlwaysStoppedAnimation<Color>(
+                    isDark ? Colors.grey[400]! : Colors.grey[600]!,
+                  ),
                 ),
               ),
             ),
