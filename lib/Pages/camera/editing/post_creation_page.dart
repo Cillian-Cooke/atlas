@@ -70,9 +70,9 @@ class _PostCreationPageState extends State<PostCreationPage> {
     }
   }
 
-  /// Upload images to Firebase Storage
-  Future<List<String>> _uploadImages(String postId) async {
-    List<String> imageUrls = [];
+  /// Upload images to Firebase Storage and get their dimensions
+  Future<List<Map<String, dynamic>>> _uploadImages(String postId) async {
+    List<Map<String, dynamic>> imageData = [];
 
     for (int i = 0; i < widget.imagePaths.length; i++) {
       try {
@@ -85,8 +85,10 @@ class _PostCreationPageState extends State<PostCreationPage> {
             .child(postId)
             .child(fileName);
 
-        // Convert image to PNG
+        // Convert image to PNG and capture dimensions
         Uint8List imageBytes;
+        int imageWidth = 0;
+        int imageHeight = 0;
         try {
           final bytes = await File(imagePath).readAsBytes();
           final decodedImage = img.decodeImage(bytes);
@@ -95,26 +97,32 @@ class _PostCreationPageState extends State<PostCreationPage> {
             throw Exception('Failed to decode image');
           }
 
+          // Capture dimensions before encoding
+          imageWidth = decodedImage.width;
+          imageHeight = decodedImage.height;
+
           imageBytes = Uint8List.fromList(img.encodePng(decodedImage));
         } catch (e) {
           debugPrint("Error converting image: $e");
           imageBytes = await File(imagePath).readAsBytes();
         }
 
-        final UploadTask uploadTask = storageRef.putData(
-          imageBytes,
-          SettableMetadata(contentType: 'image/png'),
-        );
-
+        // Upload to storage
+        final uploadTask = storageRef.putData(imageBytes);
         final TaskSnapshot snapshot = await uploadTask;
-        final String downloadUrl = await snapshot.ref.getDownloadURL();
-        imageUrls.add(downloadUrl);
+        final downloadUrl = await snapshot.ref.getDownloadURL();
+
+        imageData.add({
+          'url': downloadUrl,
+          'width': imageWidth,
+          'height': imageHeight,
+        });
       } catch (e) {
         debugPrint("Error uploading image $i: $e");
       }
     }
 
-    return imageUrls;
+    return imageData;
   }
 
   /// Upload video to Firebase Storage
@@ -165,12 +173,17 @@ class _PostCreationPageState extends State<PostCreationPage> {
     setState(() => _isSaving = true);
 
     try {
-      final List<String> imageUrls = await _uploadImages(postId);
+      final List<Map<String, dynamic>> imageDataList = await _uploadImages(postId);
       final String? videoUrl = await _uploadVideo(postId);
 
-      if (imageUrls.isEmpty && videoUrl == null) {
+      if (imageDataList.isEmpty && videoUrl == null) {
         throw Exception("Failed to upload media");
       }
+
+      // Extract URLs and dimensions for storage
+      final List<String> imageUrls = imageDataList.map((data) => data['url'] as String).toList();
+      final List<int> imageDimensionsWidth = imageDataList.map((data) => data['width'] as int).toList();
+      final List<int> imageDimensionsHeight = imageDataList.map((data) => data['height'] as int).toList();
 
       await docRef.set({
         "authorId": _userIDController.text.trim(),
@@ -179,6 +192,10 @@ class _PostCreationPageState extends State<PostCreationPage> {
         "description": _descriptionController.text.trim(),
         "tags": tags,
         "imageUrls": imageUrls,
+        "imageDimensions": {
+          "widths": imageDimensionsWidth,
+          "heights": imageDimensionsHeight,
+        },
         "videoUrl": videoUrl,
         "likesCount": 0,
         "commentsCount": 0,

@@ -55,73 +55,82 @@ class FirestoreBubbleGenerator {
     final Set<String> usedPostIds = {}; // Track already used post IDs
 
     try {
-      // Query Firestore posts collection
+      // Query Firestore posts collection with error handling
       final querySnapshot = await FirebaseFirestore.instance
           .collection('posts')
-          .get();
+          .get()
+          .timeout(
+            const Duration(seconds: 10),
+            onTimeout: () => throw Exception('Posts collection query timeout'),
+          );
 
       // First pass: collect matching posts and their likes counts
       final List<Map<String, dynamic>> matchingPosts = [];
       
       for (var doc in querySnapshot.docs) {
-        final data = doc.data();
-        final postId = doc.id;
+        try {
+          final data = doc.data();
+          final postId = doc.id;
 
-        // Extract tags array from post
-        final List<dynamic>? tagsData = data['tags'];
-        final List<String> postTags = tagsData?.map((e) => e.toString()).toList() ?? [];
+          // Extract tags array from post
+          final List<dynamic>? tagsData = data['tags'];
+          final List<String> postTags = tagsData?.map((e) => e.toString()).toList() ?? [];
 
-        // Extract username and userID from post
-        final String? postUsername = data['username'];
-        final String? postUserID = data['userID'];
+          // Extract username and userID from post
+          final String? postUsername = data['username'];
+          final String? postUserID = data['userID'];
 
-        // Check if post matches any filter criteria
-        bool matchesTag = postTags.any((tag) => labelTags.contains(tag));
-        bool matchesUsername = postUsername != null && labelUsernames.contains(postUsername);
-        bool matchesUserID = postUserID != null && labelUserIDs.contains(postUserID);
+          // Check if post matches any filter criteria
+          bool matchesTag = postTags.any((tag) => labelTags.contains(tag));
+          bool matchesUsername = postUsername != null && labelUsernames.contains(postUsername);
+          bool matchesUserID = postUserID != null && labelUserIDs.contains(postUserID);
 
-        if (matchesTag || matchesUsername || matchesUserID) {
-          // Determine primary tag for attraction (priority: userID > username > tags)
-          String primaryTag = '';
-          int tagIndex = 0;
-          
-          if (matchesUserID && postUserID.isNotEmpty) {
-            // Highest priority: userID
-            primaryTag = postUserID;
-            tagIndex = labelUserIDs.indexOf(postUserID);
-          } else if (matchesUsername && postUsername.isNotEmpty) {
-            // Second priority: username
-            primaryTag = postUsername;
-            tagIndex = labelUsernames.indexOf(postUsername);
-          } else if (matchesTag) {
-            // Lowest priority: tags
-            primaryTag = postTags.firstWhere(
-              (tag) => labelTags.contains(tag),
-              orElse: () => postTags.isNotEmpty ? postTags.first : '',
-            );
-            tagIndex = labelTags.indexOf(primaryTag);
+          if (matchesTag || matchesUsername || matchesUserID) {
+            // Determine primary tag for attraction (priority: userID > username > tags)
+            String primaryTag = '';
+            int tagIndex = 0;
+            
+            if (matchesUserID && postUserID.isNotEmpty) {
+              // Highest priority: userID
+              primaryTag = postUserID;
+              tagIndex = labelUserIDs.indexOf(postUserID);
+            } else if (matchesUsername && postUsername.isNotEmpty) {
+              // Second priority: username
+              primaryTag = postUsername;
+              tagIndex = labelUsernames.indexOf(postUsername);
+            } else if (matchesTag && postTags.isNotEmpty) {
+              // Lowest priority: tags
+              primaryTag = postTags.firstWhere(
+                (tag) => labelTags.contains(tag),
+                orElse: () => postTags.isNotEmpty ? postTags.first : '',
+              );
+              tagIndex = labelTags.indexOf(primaryTag);
+            }
+
+            // Extract likes count (default to 0 if not present)
+            final int likes = (data['likesCount'] as num?)?.toInt() ?? 0;
+            likesCounts.add(likes);
+
+            // Get color based on tag index
+            final color = _colorForTagIndex(tagIndex >= 0 ? tagIndex : 0);
+
+            matchingPosts.add({
+              'postId': postId,
+              'position': Offset(
+                random.nextDouble() * mapWidth,
+                random.nextDouble() * mapHeight,
+              ),
+              'color': color,
+              'tag': primaryTag,
+              'likes': likes,
+              'driftPhase': random.nextDouble() * 2 * pi,
+            });
+
+            usedPostIds.add(postId);
           }
-
-          // Extract likes count (default to 0 if not present)
-          final int likes = (data['likesCount'] as num?)?.toInt() ?? 0;
-          likesCounts.add(likes);
-
-          // Get color based on tag index
-          final color = _colorForTagIndex(tagIndex >= 0 ? tagIndex : 0);
-
-          matchingPosts.add({
-            'postId': postId,
-            'position': Offset(
-              random.nextDouble() * mapWidth,
-              random.nextDouble() * mapHeight,
-            ),
-            'color': color,
-            'tag': primaryTag,
-            'likes': likes,
-            'driftPhase': random.nextDouble() * 2 * pi,
-          });
-
-          usedPostIds.add(postId);
+        } catch (e) {
+          print('Error processing individual post: $e');
+          continue; // Skip this post and continue
         }
       }
 
@@ -132,57 +141,7 @@ class FirestoreBubbleGenerator {
 
         // Second pass: create bubbles with size based on relative likes
         for (final postData in matchingPosts) {
-          final likes = postData['likes'].toDouble();
-          final size = _calculateSizeFromLikes(likes, minLikes, maxLikes);
-
-          bubbles.add(
-            Bubble(
-              position: postData['position'],
-              size: size,
-              color: postData['color'],
-              tag: postData['tag'],
-              postId: postData['postId'],
-              driftPhase: postData['driftPhase'],
-            ),
-          );
-        }
-      }
-
-      // Add rogue posts if enabled and we have less than 150 bubbles
-      if (roguePostsEnabled && bubbles.length < 150) {
-        final remainingSlots = 150 - bubbles.length;
-        final List<Map<String, dynamic>> roguePosts = [];
-        final List<int> rogueLikesCounts = [];
-
-        // Fetch remaining posts that weren't used
-        for (var doc in querySnapshot.docs) {
-          if (usedPostIds.contains(doc.id)) continue;
-
-          final data = doc.data();
-          final int likes = (data['likesCount'] as num?)?.toInt() ?? 0;
-          rogueLikesCounts.add(likes);
-          
-          roguePosts.add({
-            'postId': doc.id,
-            'position': Offset(
-              random.nextDouble() * mapWidth,
-              random.nextDouble() * mapHeight,
-            ),
-            'color': Colors.grey, // Rogue posts are grey (no specific target)
-            'tag': '', // No target tag for rogue posts
-            'likes': likes,
-            'driftPhase': random.nextDouble() * 2 * pi,
-          });
-
-          if (roguePosts.length >= remainingSlots) break;
-        }
-
-        // Create bubbles for rogue posts
-        if (rogueLikesCounts.isNotEmpty && roguePosts.isNotEmpty) {
-          final minLikes = rogueLikesCounts.reduce((a, b) => a < b ? a : b).toDouble();
-          final maxLikes = rogueLikesCounts.reduce((a, b) => a > b ? a : b).toDouble();
-
-          for (final postData in roguePosts) {
+          try {
             final likes = postData['likes'].toDouble();
             final size = _calculateSizeFromLikes(likes, minLikes, maxLikes);
 
@@ -196,11 +155,86 @@ class FirestoreBubbleGenerator {
                 driftPhase: postData['driftPhase'],
               ),
             );
+          } catch (e) {
+            print('Error creating bubble: $e');
+            continue; // Skip this bubble and continue
           }
+        }
+      }
+
+      // Add rogue posts if enabled and we have less than 150 bubbles
+      if (roguePostsEnabled && bubbles.length < 150) {
+        try {
+          final remainingSlots = 150 - bubbles.length;
+          final List<Map<String, dynamic>> roguePosts = [];
+          final List<int> rogueLikesCounts = [];
+
+          // Fetch remaining posts that weren't used
+          for (var doc in querySnapshot.docs) {
+            try {
+              if (usedPostIds.contains(doc.id)) continue;
+
+              final data = doc.data();
+              final int likes = (data['likesCount'] as num?)?.toInt() ?? 0;
+              rogueLikesCounts.add(likes);
+              
+              roguePosts.add({
+                'postId': doc.id,
+                'position': Offset(
+                  random.nextDouble() * mapWidth,
+                  random.nextDouble() * mapHeight,
+                ),
+                'color': Colors.grey, // Rogue posts are grey (no specific target)
+                'tag': '', // No target tag for rogue posts
+                'likes': likes,
+                'driftPhase': random.nextDouble() * 2 * pi,
+              });
+
+              if (roguePosts.length >= remainingSlots) break;
+            } catch (e) {
+              print('Error processing rogue post: $e');
+              continue;
+            }
+          }
+
+          // Create bubbles for rogue posts
+          if (rogueLikesCounts.isNotEmpty && roguePosts.isNotEmpty) {
+            try {
+              final minLikes = rogueLikesCounts.reduce((a, b) => a < b ? a : b).toDouble();
+              final maxLikes = rogueLikesCounts.reduce((a, b) => a > b ? a : b).toDouble();
+
+              for (final postData in roguePosts) {
+                try {
+                  final likes = postData['likes'].toDouble();
+                  final size = _calculateSizeFromLikes(likes, minLikes, maxLikes);
+
+                  bubbles.add(
+                    Bubble(
+                      position: postData['position'],
+                      size: size,
+                      color: postData['color'],
+                      tag: postData['tag'],
+                      postId: postData['postId'],
+                      driftPhase: postData['driftPhase'],
+                    ),
+                  );
+                } catch (e) {
+                  print('Error creating rogue bubble: $e');
+                  continue;
+                }
+              }
+            } catch (e) {
+              print('Error calculating rogue post sizes: $e');
+            }
+          }
+        } catch (e) {
+          print('Error adding rogue posts: $e');
+          // Continue without rogue posts, don't crash
         }
       }
     } catch (e) {
       print('Error fetching bubbles from Firestore: $e');
+      // Return empty list on error instead of crashing
     }
 
     return bubbles;

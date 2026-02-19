@@ -392,6 +392,15 @@ class _FeedPageState extends State<PostFeedPage> {
     String dateString = createdAt != null
         ? _formatDate(createdAt.toDate())
         : 'Unknown Date';
+    
+    // Extract image dimensions for proper aspect ratio
+    Map<String, dynamic>? imageDimensions = data['imageDimensions'];
+    List<int> imageWidths = [];
+    List<int> imageHeights = [];
+    if (imageDimensions != null) {
+      imageWidths = List<int>.from(imageDimensions['widths'] ?? []);
+      imageHeights = List<int>.from(imageDimensions['heights'] ?? []);
+    }
 
     return RepaintBoundary(
       key: ValueKey(postId), // Unique key to maintain widget identity
@@ -439,7 +448,7 @@ class _FeedPageState extends State<PostFeedPage> {
               _buildVideoSection(videoUrl, postId)
             else if (imageUrls.isNotEmpty)
               // Display images if no video, but images exist
-              _buildImageSection(imageUrls, postId)
+              _buildImageSection(imageUrls, postId, imageWidths, imageHeights)
             else
               // Display placeholder if neither video nor images
               _buildNoMediaPlaceholder(),
@@ -622,7 +631,7 @@ class _FeedPageState extends State<PostFeedPage> {
     );
   }
 
-  Widget _buildImageSection(List<dynamic> imageUrls, String postId) {
+  Widget _buildImageSection(List<dynamic> imageUrls, String postId, List<int> imageWidths, List<int> imageHeights) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     
     // No images available
@@ -648,19 +657,24 @@ class _FeedPageState extends State<PostFeedPage> {
 
     // Single image
     if (imageUrls.length == 1) {
-      return _buildSingleImage(imageUrls[0].toString(), postId);
+      return _buildSingleImage(imageUrls[0].toString(), postId, imageWidths.isNotEmpty ? imageWidths[0] : 0, imageHeights.isNotEmpty ? imageHeights[0] : 0);
     }
 
     // Multiple images - Instagram-style carousel
-    return _buildImageCarousel(imageUrls, postId);
+    return _buildImageCarousel(imageUrls, postId, imageWidths, imageHeights);
   }
 
-  Widget _buildSingleImage(String imageUrl, String postId) {
+  Widget _buildSingleImage(String imageUrl, String postId, int imageWidth, int imageHeight) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final bgColor = isDark ? const Color.fromARGB(255, 50, 50, 50) : Colors.grey[300];
     final maxWidth = MediaQuery.of(context).size.width;
-    // Calculate expected height based on default aspect ratio
-    final expectedHeight = maxWidth / defaultAspectRatio;
+    
+    // Calculate aspect ratio from stored dimensions, or use default
+    double aspectRatio = defaultAspectRatio;
+    if (imageWidth > 0 && imageHeight > 0) {
+      aspectRatio = imageWidth / imageHeight;
+    }
+    final expectedHeight = maxWidth / aspectRatio;
     
     return SizedBox(
       height: expectedHeight,
@@ -710,7 +724,7 @@ class _FeedPageState extends State<PostFeedPage> {
               );
             },
             placeholder: (context, url) => AspectRatio(
-              aspectRatio: defaultAspectRatio,
+              aspectRatio: aspectRatio,
               child: Container(
                 color: bgColor,
                 child: const Center(
@@ -719,7 +733,7 @@ class _FeedPageState extends State<PostFeedPage> {
               ),
             ),
             errorWidget: (context, url, error) => AspectRatio(
-              aspectRatio: defaultAspectRatio,
+              aspectRatio: aspectRatio,
               child: Container(
                 color: bgColor,
                 child: Center(
@@ -779,10 +793,12 @@ class _FeedPageState extends State<PostFeedPage> {
     overlay.insert(overlayEntry);
   }
 
-  Widget _buildImageCarousel(List<dynamic> imageUrls, String postId) {
+  Widget _buildImageCarousel(List<dynamic> imageUrls, String postId, List<int> imageWidths, List<int> imageHeights) {
     return ImageCarousel(
       imageUrls: imageUrls,
       postId: postId,
+      imageWidths: imageWidths,
+      imageHeights: imageHeights,
       onDoubleTap: () async {
         // Check if already liked
         final currentUser = _auth.currentUser;
@@ -854,12 +870,16 @@ class _FeedPageState extends State<PostFeedPage> {
 class ImageCarousel extends StatefulWidget {
   final List<dynamic> imageUrls;
   final String postId;
+  final List<int> imageWidths;
+  final List<int> imageHeights;
   final VoidCallback onDoubleTap;
 
   const ImageCarousel({
     super.key,
     required this.imageUrls,
     required this.postId,
+    required this.imageWidths,
+    required this.imageHeights,
     required this.onDoubleTap,
   });
 
@@ -888,15 +908,23 @@ class _ImageCarouselState extends State<ImageCarousel> {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final bgColor = isDark ? const Color.fromARGB(255, 50, 50, 50) : Colors.grey[300];
     final maxWidth = MediaQuery.of(context).size.width;
-    final expectedHeight = maxWidth / _FeedPageState.defaultAspectRatio;
+    
+    // Calculate aspect ratio for current page based on stored dimensions
+    double currentAspectRatio = _FeedPageState.defaultAspectRatio;
+    if (_currentPage < widget.imageWidths.length && _currentPage < widget.imageHeights.length) {
+      final width = widget.imageWidths[_currentPage];
+      final height = widget.imageHeights[_currentPage];
+      if (width > 0 && height > 0) {
+        currentAspectRatio = width / height;
+      }
+    }
+    final expectedHeight = maxWidth / currentAspectRatio;
     
     return SizedBox(
       height: expectedHeight,
       child: Container(
         color: bgColor,
-        child: AspectRatio(
-          aspectRatio: _FeedPageState.defaultAspectRatio,
-          child: Stack(
+        child: Stack(
           children: [
             // Image PageView with double-tap support
             GestureDetector(
@@ -910,6 +938,16 @@ class _ImageCarouselState extends State<ImageCarousel> {
                 },
                 itemCount: widget.imageUrls.length,
                 itemBuilder: (context, index) {
+                  // Calculate aspect ratio for this specific image
+                  double imageAspectRatio = _FeedPageState.defaultAspectRatio;
+                  if (index < widget.imageWidths.length && index < widget.imageHeights.length) {
+                    final width = widget.imageWidths[index];
+                    final height = widget.imageHeights[index];
+                    if (width > 0 && height > 0) {
+                      imageAspectRatio = width / height;
+                    }
+                  }
+                  
                   return CachedNetworkImage(
                     imageUrl: widget.imageUrls[index].toString(),
                     fit: BoxFit.contain,
@@ -923,25 +961,31 @@ class _ImageCarouselState extends State<ImageCarousel> {
                         gaplessPlayback: false,
                       );
                     },
-                    placeholder: (context, url) => Container(
-                      color: bgColor,
-                      child: const Center(
-                        child: CircularProgressIndicator(strokeWidth: 2),
+                    placeholder: (context, url) => AspectRatio(
+                      aspectRatio: imageAspectRatio,
+                      child: Container(
+                        color: bgColor,
+                        child: const Center(
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        ),
                       ),
                     ),
-                    errorWidget: (context, url, error) => Container(
-                      color: bgColor,
-                      child: Center(
-                        child: Column(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            Icon(Icons.broken_image, size: 60, color: isDark ? Colors.grey[400] : Colors.grey[600]),
-                            const SizedBox(height: 10),
-                            Text(
-                              'Failed to load image',
-                              style: TextStyle(color: isDark ? Colors.grey[400] : Colors.grey[600]),
-                            ),
-                          ],
+                    errorWidget: (context, url, error) => AspectRatio(
+                      aspectRatio: imageAspectRatio,
+                      child: Container(
+                        color: bgColor,
+                        child: Center(
+                          child: Column(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              Icon(Icons.broken_image, size: 60, color: isDark ? Colors.grey[400] : Colors.grey[600]),
+                              const SizedBox(height: 10),
+                              Text(
+                                'Failed to load image',
+                                style: TextStyle(color: isDark ? Colors.grey[400] : Colors.grey[600]),
+                              ),
+                            ],
+                          ),
                         ),
                       ),
                     ),
@@ -997,7 +1041,6 @@ class _ImageCarouselState extends State<ImageCarousel> {
           ],
         ),
       ),
-    ),
     );
   }
 }

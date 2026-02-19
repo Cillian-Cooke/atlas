@@ -67,10 +67,19 @@ class HomePageState extends State<HomePage> with TickerProviderStateMixin {
   // NEW: Load labels from Firestore
   Future<void> _loadLabelsFromFirestore() async {
     try {
+      // Check if userId is valid
+      if (widget.userId.isEmpty) {
+        throw Exception('User ID is empty');
+      }
+
       DocumentSnapshot doc = await FirebaseFirestore.instance
           .collection("users")
           .doc(widget.userId)
-          .get(GetOptions(source: Source.server));
+          .get(GetOptions(source: Source.server))
+          .timeout(
+            const Duration(seconds: 5),
+            onTimeout: () => throw Exception('Firestore connection timeout'),
+          );
 
       if (mounted) {
         final data = doc.data();
@@ -80,11 +89,12 @@ class HomePageState extends State<HomePage> with TickerProviderStateMixin {
           // Try to get labels array from Firestore
           final labelsFromFirestore = data['labels'];
           
-          if (labelsFromFirestore is List) {
+          if (labelsFromFirestore is List && labelsFromFirestore.isNotEmpty) {
             // Convert to List<String>
             loadedLabels = labelsFromFirestore
                 .whereType<String>()
                 .cast<String>()
+                .where((label) => label.isNotEmpty)
                 .toList();
           }
         }
@@ -120,21 +130,38 @@ class HomePageState extends State<HomePage> with TickerProviderStateMixin {
   // NEW: Save labels to Firestore
   Future<void> _saveLabelsToFirestore(List<String> newLabels) async {
     try {
+      // Check if userId is valid
+      if (widget.userId.isEmpty) {
+        print('Cannot save labels: User ID is empty');
+        return;
+      }
+
+      // Filter out null or empty labels
+      final validLabels = newLabels.where((label) => label.isNotEmpty).toList();
+      if (validLabels.isEmpty) {
+        print('Cannot save labels: No valid labels');
+        return;
+      }
+
       await FirebaseFirestore.instance
           .collection("users")
           .doc(widget.userId)
           .update({
-        'labels': newLabels,
-      });
-      print('Labels saved to Firestore: $newLabels');
+        'labels': validLabels,
+      }).timeout(
+        const Duration(seconds: 5),
+        onTimeout: () => throw Exception('Save timeout'),
+      );
+      print('Labels saved to Firestore: $validLabels');
     } catch (e) {
       print('Error saving labels to Firestore: $e');
-      // Show error to user
-      if (mounted) {
+      // Only show error if not a connection issue on web
+      if (mounted && !e.toString().contains('timeout')) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Failed to save labels: $e'),
-            backgroundColor: Colors.red,
+            content: const Text('Note: Labels not saved (offline or no account)'),
+            duration: const Duration(seconds: 2),
+            backgroundColor: Colors.orange,
           ),
         );
       }
@@ -167,8 +194,14 @@ class HomePageState extends State<HomePage> with TickerProviderStateMixin {
     final mapSize = tileSize * visibleTiles;
 
     try {
-      // Get rogue posts enabled flag
-      final roguePostsEnabled = await _postService.getRoguePostsEnabledFlag();
+      // Get rogue posts enabled flag with fallback
+      bool roguePostsEnabled = true;
+      try {
+        roguePostsEnabled = await _postService.getRoguePostsEnabledFlag();
+      } catch (e) {
+        print('Error getting rogue posts flag: $e');
+        roguePostsEnabled = true; // Default to true
+      }
 
       final generator = FirestoreBubbleGenerator(
         mapWidth: mapSize,
@@ -179,16 +212,23 @@ class HomePageState extends State<HomePage> with TickerProviderStateMixin {
         roguePostsEnabled: roguePostsEnabled,
       );
 
-      final newBubbles = await generator.fetchBubbles();
+      final newBubbles = await generator.fetchBubbles()
+          .timeout(
+            const Duration(seconds: 10),
+            onTimeout: () => [],
+          );
       
-      for (final b in newBubbles) {
-        if (mounted) {
-          setState(() => bubbles.add(b));
-          await Future.delayed(const Duration(milliseconds: 50));
+      if (newBubbles.isNotEmpty) {
+        for (final b in newBubbles) {
+          if (mounted) {
+            setState(() => bubbles.add(b));
+            await Future.delayed(const Duration(milliseconds: 50));
+          }
         }
       }
     } catch (e) {
       print('Error spawning bubbles from Firestore: $e');
+      // Don't crash, just continue with empty bubbles
     } finally {
       if (mounted) {
         setState(() => _isLoadingBubbles = false);
@@ -289,8 +329,8 @@ class HomePageState extends State<HomePage> with TickerProviderStateMixin {
           ),
           textInputAction: TextInputAction.done,
           onSubmitted: (value) {
-            if (value.isNotEmpty) {
-              final newLabels = [...labelNames, value];
+            if (value.trim().isNotEmpty) {
+              final newLabels = [...labelNames, value.trim()];
               updateLabelNames(newLabels);
               Navigator.of(context).pop();
             }
@@ -303,8 +343,9 @@ class HomePageState extends State<HomePage> with TickerProviderStateMixin {
           ),
           TextButton(
             onPressed: () {
-              if (labelController.text.isNotEmpty) {
-                final newLabels = [...labelNames, labelController.text];
+              final trimmedText = labelController.text.trim();
+              if (trimmedText.isNotEmpty) {
+                final newLabels = [...labelNames, trimmedText];
                 updateLabelNames(newLabels);
                 Navigator.of(context).pop();
               }
@@ -370,13 +411,13 @@ class HomePageState extends State<HomePage> with TickerProviderStateMixin {
               angle = (angle * 180 / math.pi) + 90;
               if (angle < 0) angle += 360;
 
-              final itemCount = 4; // Your command count
+              final itemCount = 4; // Updated to 4 commands: Edit, Attract, Reload, Add Label
               final itemAngle = 360 / itemCount;
               final index = (angle / itemAngle).floor() % itemCount;
 
-              // Find and execute the selected command
+              // Execute the selected command
               final items = [
-                'Edit', 'Delete', 'Share', 'Like'
+                'Edit', 'Attract', 'Reload', 'Add Label'
               ];
               if (index >= 0 && index < items.length) {
                 print(items[index]);
@@ -458,11 +499,20 @@ class HomePageState extends State<HomePage> with TickerProviderStateMixin {
                       ),
                       CommandWheelItem(
                         icon: Icons.refresh,
-                        label: 'Refresh',
+                        label: 'Reload',
                         backgroundColor: Colors.pink.withOpacity(0.7),
                         onSelected: () {
-                          print('Refresh');
+                          _refreshBubbles();
                           _hideCommandWheel();
+                        },
+                      ),
+                      CommandWheelItem(
+                        icon: Icons.add,
+                        label: 'Add Label',
+                        backgroundColor: Colors.green.withOpacity(0.7),
+                        onSelected: () {
+                          _hideCommandWheel();
+                          _showAddLabelDialog();
                         },
                       ),
                     ],
