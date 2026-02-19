@@ -34,6 +34,7 @@ class FirestoreBubbleGenerator {
   final List<String> labelTags; // Tags from label list
   final List<String> labelUsernames; // Usernames from label list
   final List<String> labelUserIDs; // UserIDs from label list
+  final bool roguePostsEnabled; // Enable rogue posts to fill space
 
   FirestoreBubbleGenerator({
     required this.mapWidth,
@@ -43,6 +44,7 @@ class FirestoreBubbleGenerator {
     this.labelUserIDs = const [],
     this.minSize = 15,
     this.maxSize = 150,
+    this.roguePostsEnabled = true,
   });
 
   /// Fetch bubbles from Firestore 'posts' collection
@@ -50,6 +52,7 @@ class FirestoreBubbleGenerator {
     final List<Bubble> bubbles = [];
     final List<int> likesCounts = [];
     final random = Random();
+    final Set<String> usedPostIds = {}; // Track already used post IDs
 
     try {
       // Query Firestore posts collection
@@ -117,6 +120,8 @@ class FirestoreBubbleGenerator {
             'likes': likes,
             'driftPhase': random.nextDouble() * 2 * pi,
           });
+
+          usedPostIds.add(postId);
         }
       }
 
@@ -140,6 +145,58 @@ class FirestoreBubbleGenerator {
               driftPhase: postData['driftPhase'],
             ),
           );
+        }
+      }
+
+      // Add rogue posts if enabled and we have less than 150 bubbles
+      if (roguePostsEnabled && bubbles.length < 150) {
+        final remainingSlots = 150 - bubbles.length;
+        final List<Map<String, dynamic>> roguePosts = [];
+        final List<int> rogueLikesCounts = [];
+
+        // Fetch remaining posts that weren't used
+        for (var doc in querySnapshot.docs) {
+          if (usedPostIds.contains(doc.id)) continue;
+
+          final data = doc.data();
+          final int likes = (data['likesCount'] as num?)?.toInt() ?? 0;
+          rogueLikesCounts.add(likes);
+          
+          roguePosts.add({
+            'postId': doc.id,
+            'position': Offset(
+              random.nextDouble() * mapWidth,
+              random.nextDouble() * mapHeight,
+            ),
+            'color': Colors.grey, // Rogue posts are grey (no specific target)
+            'tag': '', // No target tag for rogue posts
+            'likes': likes,
+            'driftPhase': random.nextDouble() * 2 * pi,
+          });
+
+          if (roguePosts.length >= remainingSlots) break;
+        }
+
+        // Create bubbles for rogue posts
+        if (rogueLikesCounts.isNotEmpty && roguePosts.isNotEmpty) {
+          final minLikes = rogueLikesCounts.reduce((a, b) => a < b ? a : b).toDouble();
+          final maxLikes = rogueLikesCounts.reduce((a, b) => a > b ? a : b).toDouble();
+
+          for (final postData in roguePosts) {
+            final likes = postData['likes'].toDouble();
+            final size = _calculateSizeFromLikes(likes, minLikes, maxLikes);
+
+            bubbles.add(
+              Bubble(
+                position: postData['position'],
+                size: size,
+                color: postData['color'],
+                tag: postData['tag'],
+                postId: postData['postId'],
+                driftPhase: postData['driftPhase'],
+              ),
+            );
+          }
         }
       }
     } catch (e) {

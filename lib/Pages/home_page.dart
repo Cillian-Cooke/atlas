@@ -5,6 +5,7 @@ import '../Map_And_Bubbles/bubble_data.dart';
 import '../Map_And_Bubbles/label_data.dart';
 import '../Map_And_Bubbles/bubble_simulation.dart';
 import '../Widgets/command_wheel.dart';
+import '../Services/post_service.dart';
 import 'dart:async';
 import 'dart:math' as math;
 
@@ -37,6 +38,7 @@ class HomePageState extends State<HomePage> with TickerProviderStateMixin {
   final List<Bubble> bubbles = [];
   final GlobalKey<BubbleSimulationState> _simKey = GlobalKey();
   final GlobalKey<TiledMapViewerState> _mapViewerKey = GlobalKey();
+  final PostService _postService = PostService();
 
   double _currentZoom = 1.0;
   bool _isLoadingBubbles = false;
@@ -165,12 +167,16 @@ class HomePageState extends State<HomePage> with TickerProviderStateMixin {
     final mapSize = tileSize * visibleTiles;
 
     try {
+      // Get rogue posts enabled flag
+      final roguePostsEnabled = await _postService.getRoguePostsEnabledFlag();
+
       final generator = FirestoreBubbleGenerator(
         mapWidth: mapSize,
         mapHeight: mapSize,
         labelTags: labelNames,
         labelUsernames: labelNames,
         labelUserIDs: labelNames,
+        roguePostsEnabled: roguePostsEnabled,
       );
 
       final newBubbles = await generator.fetchBubbles();
@@ -262,6 +268,52 @@ class HomePageState extends State<HomePage> with TickerProviderStateMixin {
       _commandWheelPosition = null;
       _commandWheelDragPosition = null;
     });
+  }
+
+  void _refreshBubbles() {
+    _spawnBubblesFromFirestore();
+  }
+
+  void _showAddLabelDialog() {
+    final labelController = TextEditingController();
+    
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Add New Label'),
+        content: TextField(
+          controller: labelController,
+          decoration: const InputDecoration(
+            hintText: 'Enter label name',
+            border: OutlineInputBorder(),
+          ),
+          textInputAction: TextInputAction.done,
+          onSubmitted: (value) {
+            if (value.isNotEmpty) {
+              final newLabels = [...labelNames, value];
+              updateLabelNames(newLabels);
+              Navigator.of(context).pop();
+            }
+          },
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () {
+              if (labelController.text.isNotEmpty) {
+                final newLabels = [...labelNames, labelController.text];
+                updateLabelNames(newLabels);
+                Navigator.of(context).pop();
+              }
+            },
+            child: const Text('Add'),
+          ),
+        ],
+      ),
+    );
   }
 
   @override

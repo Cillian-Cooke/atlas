@@ -491,7 +491,6 @@ class _CommentItem extends StatefulWidget {
   final String postOwnerId;
 
   const _CommentItem({
-    super.key,
     required this.commentId,
     required this.postId,
     required this.userId,
@@ -702,7 +701,6 @@ class _RepliesSection extends StatelessWidget {
   final String parentCommentId;
 
   const _RepliesSection({
-    super.key,
     required this.postId,
     required this.parentCommentId,
   });
@@ -762,7 +760,6 @@ class _ReplyItem extends StatelessWidget {
   final Timestamp? createdAt;
 
   const _ReplyItem({
-    super.key,
     required this.replyId,
     required this.postId,
     required this.parentCommentId,

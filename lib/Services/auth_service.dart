@@ -75,6 +75,8 @@ class AuthService {
           'groups': [],
           // Seen posts feature
           'unseenPostsOnly': false,
+          // Rogue posts feature
+          'roguePostsEnabled': true,
         });
       } else {
         // Update existing user

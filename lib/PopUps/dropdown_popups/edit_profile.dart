@@ -15,20 +15,23 @@ class EditProfilePopUp extends StatefulWidget {
 class _EditProfilePopUpState extends State<EditProfilePopUp> {
   late PostService _postService;
   bool _unseenPostsOnly = false;
+  bool _roguePostsEnabled = true;
   bool _isLoading = true;
 
   @override
   void initState() {
     super.initState();
     _postService = PostService();
-    _loadUnseenPostsOnlyStatus();
+    _loadSettings();
   }
 
-  Future<void> _loadUnseenPostsOnlyStatus() async {
-    final status = await _postService.getUnseenPostsOnlyFlag();
+  Future<void> _loadSettings() async {
+    final unseenStatus = await _postService.getUnseenPostsOnlyFlag();
+    final rogueStatus = await _postService.getRoguePostsEnabledFlag();
     if (mounted) {
       setState(() {
-        _unseenPostsOnly = status;
+        _unseenPostsOnly = unseenStatus;
+        _roguePostsEnabled = rogueStatus;
         _isLoading = false;
       });
     }
@@ -39,6 +42,13 @@ class _EditProfilePopUpState extends State<EditProfilePopUp> {
       _unseenPostsOnly = value;
     });
     await _postService.setUnseenPostsOnly(value);
+  }
+
+  Future<void> _toggleRoguePostsEnabled(bool value) async {
+    setState(() {
+      _roguePostsEnabled = value;
+    });
+    await _postService.setRoguePostsEnabled(value);
   }
 
   @override
@@ -78,6 +88,29 @@ class _EditProfilePopUpState extends State<EditProfilePopUp> {
                       trailing: Switch(
                         value: _unseenPostsOnly,
                         onChanged: _toggleUnseenPostsOnly,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  // Rogue Posts Toggle
+                  Container(
+                    decoration: BoxDecoration(
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(
+                        color: Colors.grey[300] ?? Colors.grey,
+                      ),
+                    ),
+                    child: ListTile(
+                      title: Text(_roguePostsEnabled ? 'Rogue Posts Enabled' : 'Rogue Posts Disabled'),
+                      subtitle: Text(
+                        _roguePostsEnabled
+                            ? 'Fill empty map space with random floating posts'
+                            : 'Only show posts matching your labels',
+                        style: const TextStyle(fontSize: 12),
+                      ),
+                      trailing: Switch(
+                        value: _roguePostsEnabled,
+                        onChanged: _toggleRoguePostsEnabled,
                       ),
                     ),
                   ),

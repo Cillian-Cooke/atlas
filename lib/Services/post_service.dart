@@ -144,4 +144,46 @@ class PostService {
       print('Error clearing old seen posts: $e');
     }
   }
+
+  /// Get the roguePostsEnabled toggle status for current user
+  Future<bool> getRoguePostsEnabledFlag() async {
+    final user = _auth.currentUser;
+    if (user == null) return true;
+
+    try {
+      final doc = await _firestore.collection('users').doc(user.uid).get();
+      return doc.data()?['roguePostsEnabled'] ?? true;
+    } catch (e) {
+      print('Error getting roguePostsEnabled flag: $e');
+      return true;
+    }
+  }
+
+  /// Stream of roguePostsEnabled toggle status
+  Stream<bool> getRoguePostsEnabledStream() {
+    final user = _auth.currentUser;
+    if (user == null) {
+      return Stream.value(true);
+    }
+
+    return _firestore
+        .collection('users')
+        .doc(user.uid)
+        .snapshots()
+        .map((snapshot) => snapshot.data()?['roguePostsEnabled'] ?? true);
+  }
+
+  /// Toggle the roguePostsEnabled flag
+  Future<void> setRoguePostsEnabled(bool value) async {
+    final user = _auth.currentUser;
+    if (user == null) return;
+
+    try {
+      await _firestore.collection('users').doc(user.uid).update({
+        'roguePostsEnabled': value,
+      });
+    } catch (e) {
+      print('Error toggling roguePostsEnabled: $e');
+    }
+  }
 }
