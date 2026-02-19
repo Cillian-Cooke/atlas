@@ -6,9 +6,9 @@ class RegistrationScreen extends StatefulWidget {
   final VoidCallback onRegistrationComplete;
 
   const RegistrationScreen({
-    Key? key,
+    super.key,
     required this.onRegistrationComplete,
-  }) : super(key: key);
+  });
 
   @override
   State<RegistrationScreen> createState() => _RegistrationScreenState();

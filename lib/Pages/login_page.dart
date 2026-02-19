@@ -8,9 +8,9 @@ class LoginScreen extends StatefulWidget {
   final VoidCallback onLoginSuccess;
 
   const LoginScreen({
-    Key? key,
+    super.key,
     required this.onLoginSuccess,
-  }) : super(key: key);
+  });
 
   @override
   State<LoginScreen> createState() => _LoginScreenState();

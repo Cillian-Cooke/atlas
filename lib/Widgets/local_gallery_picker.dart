@@ -26,7 +26,7 @@ class _LocalGalleryPickerState extends State<LocalGalleryPicker> {
   List<File> _galleryFiles = [];
 
   /// Set of selected file paths (for quick lookup of selected items)
-  Set<String> _selectedPaths = {};
+  final Set<String> _selectedPaths = {};
 
   /// Whether the gallery is currently loading from storage
   bool _isLoading = true;
@@ -65,7 +65,7 @@ class _LocalGalleryPickerState extends State<LocalGalleryPicker> {
       // List all files in the gallery directory
       final files = galleryDir
           .listSync()
-          .where((entity) => entity is File)
+          .whereType<File>()
           .map((entity) => File(entity.path))
           .toList();
 

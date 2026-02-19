@@ -258,7 +258,7 @@ class _EditMapPopUpContentState extends State<EditMapPopUpContent> {
                 ),
               ),
             );
-          }).toList(),
+          }),
 
           TextButton.icon(
             onPressed: _showEditMapListDialog,

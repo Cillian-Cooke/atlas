@@ -30,7 +30,7 @@ class CommandWheel extends StatefulWidget {
   final VoidCallback? onDragEnd;
 
   const CommandWheel({
-    Key? key,
+    super.key,
     required this.items,
     this.radius = 140,
     this.iconSize = 28,
@@ -39,7 +39,7 @@ class CommandWheel extends StatefulWidget {
     this.wheelThickness = 80,
     this.dragPosition,
     this.onDragEnd,
-  }) : super(key: key);
+  });
 
   @override
   State<CommandWheel> createState() => _CommandWheelState();
@@ -84,7 +84,7 @@ class _CommandWheelState extends State<CommandWheel>
     return Center(
       child: ScaleTransition(
         scale: _scaleAnimation,
-        child: Container(
+        child: SizedBox(
           width: widget.radius * 2.8,
           height: widget.radius * 2.8,
           child: CustomPaint(
@@ -492,7 +492,7 @@ class CommandWheelOverlay {
             top: position.dy - 196,
             child: Material(
               color: Colors.transparent,
-              child: Container(
+              child: SizedBox(
                 width: 392,
                 height: 392,
                 child: CommandWheel(

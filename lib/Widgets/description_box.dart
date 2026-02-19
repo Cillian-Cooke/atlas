@@ -41,7 +41,7 @@ class _LabeledBoxState extends State<LabeledBox> {
       if (lastSpace > 0 && lastSpace > widget.maxLength - 20) {
         truncated = truncated.substring(0, lastSpace);
       }
-      displayText = truncated + '...';
+      displayText = '$truncated...';
     } else {
       displayText = widget.value;
     }

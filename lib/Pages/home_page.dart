@@ -81,7 +81,7 @@ class HomePageState extends State<HomePage> with TickerProviderStateMixin {
           if (labelsFromFirestore is List) {
             // Convert to List<String>
             loadedLabels = labelsFromFirestore
-                .where((item) => item is String)
+                .whereType<String>()
                 .cast<String>()
                 .toList();
           }

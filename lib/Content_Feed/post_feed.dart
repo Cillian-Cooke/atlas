@@ -9,6 +9,7 @@ import '../PopUps/map_menu_popup.dart';
 import '../Widgets/profile_header.dart';
 import '../Map_And_Bubbles/user_map_page.dart';
 import '../PopUps/comment_section_popup.dart';
+import '../Services/post_service.dart';
 
 class PostFeedPage extends StatefulWidget {
   final String title;
@@ -27,6 +28,7 @@ class PostFeedPage extends StatefulWidget {
 class _FeedPageState extends State<PostFeedPage> {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
   final FirebaseAuth _auth = FirebaseAuth.instance;
+  final PostService _postService = PostService();
   final ScrollController _scrollController = ScrollController();
   
   // ========== CONFIGURABLE SETTINGS ==========
@@ -265,36 +267,112 @@ class _FeedPageState extends State<PostFeedPage> {
   }
 
   Widget _buildDefaultFeed() {
-    return StreamBuilder<QuerySnapshot>(
-      stream: _firestore.collection('posts').limit(50).snapshots(),
-      builder: (context, snapshot) {
-        if (snapshot.hasError) {
-          return Center(child: Text('Error: ${snapshot.error}'));
+    // Listen to both the unseenPostsOnly flag and the seenPosts stream
+    return StreamBuilder<bool>(
+      stream: _postService.getUnseenPostsOnlyStream(),
+      builder: (context, unseenOnlySnapshot) {
+        final unseenPostsOnly = unseenOnlySnapshot.data ?? false;
+
+        if (!unseenPostsOnly) {
+          // Show all posts
+          return StreamBuilder<QuerySnapshot>(
+            stream: _firestore.collection('posts').limit(50).snapshots(),
+            builder: (context, snapshot) {
+              if (snapshot.hasError) {
+                return Center(child: Text('Error: ${snapshot.error}'));
+              }
+
+              if (snapshot.connectionState == ConnectionState.waiting) {
+                return const Center(child: CircularProgressIndicator());
+              }
+
+              if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
+                return const Center(child: Text('No posts available'));
+              }
+
+              return ListView.builder(
+                controller: _scrollController,
+                physics: const ClampingScrollPhysics(),
+                cacheExtent: cacheExtent,
+                addAutomaticKeepAlives: true,
+                addRepaintBoundaries: true,
+                addSemanticIndexes: false,
+                itemCount: snapshot.data!.docs.length,
+                itemBuilder: (context, index) {
+                  var doc = snapshot.data!.docs[index];
+                  var data = doc.data() as Map<String, dynamic>;
+
+                  // Mark post as seen
+                  _postService.markPostAsSeen(doc.id);
+
+                  return _buildPostCard(doc.id, data);
+                },
+              );
+            },
+          );
+        } else {
+          // Show only unseen posts
+          return StreamBuilder<List<String>>(
+            stream: _postService.getSeenPostIdsStream(),
+            builder: (context, seenPostsSnapshot) {
+              if (seenPostsSnapshot.connectionState == ConnectionState.waiting) {
+                return const Center(child: CircularProgressIndicator());
+              }
+
+              final seenPostIds = seenPostsSnapshot.data ?? [];
+
+              return StreamBuilder<QuerySnapshot>(
+                stream: _firestore.collection('posts').limit(100).snapshots(),
+                builder: (context, snapshot) {
+                  if (snapshot.hasError) {
+                    return Center(child: Text('Error: ${snapshot.error}'));
+                  }
+
+                  if (snapshot.connectionState == ConnectionState.waiting) {
+                    return const Center(child: CircularProgressIndicator());
+                  }
+
+                  if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
+                    return const Center(child: Text('No posts available'));
+                  }
+
+                  // Filter out seen posts
+                  final unseenPosts = snapshot.data!.docs
+                      .where((doc) => !seenPostIds.contains(doc.id))
+                      .toList();
+
+                  if (unseenPosts.isEmpty) {
+                    return const Center(
+                      child: Text(
+                        'No new posts to show',
+                        style: TextStyle(fontSize: 16),
+                      ),
+                    );
+                  }
+
+                  return ListView.builder(
+                    controller: _scrollController,
+                    physics: const ClampingScrollPhysics(),
+                    cacheExtent: cacheExtent,
+                    addAutomaticKeepAlives: true,
+                    addRepaintBoundaries: true,
+                    addSemanticIndexes: false,
+                    itemCount: unseenPosts.length,
+                    itemBuilder: (context, index) {
+                      var doc = unseenPosts[index];
+                      var data = doc.data() as Map<String, dynamic>;
+
+                      // Mark post as seen
+                      _postService.markPostAsSeen(doc.id);
+
+                      return _buildPostCard(doc.id, data);
+                    },
+                  );
+                },
+              );
+            },
+          );
         }
-
-        if (snapshot.connectionState == ConnectionState.waiting) {
-          return const Center(child: CircularProgressIndicator());
-        }
-
-        if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
-          return const Center(child: Text('No posts available'));
-        }
-
-        return ListView.builder(
-          controller: _scrollController,
-          physics: const ClampingScrollPhysics(),
-          cacheExtent: cacheExtent,
-          addAutomaticKeepAlives: true,
-          addRepaintBoundaries: true,
-          addSemanticIndexes: false,
-          itemCount: snapshot.data!.docs.length,
-          itemBuilder: (context, index) {
-            var doc = snapshot.data!.docs[index];
-            var data = doc.data() as Map<String, dynamic>;
-
-            return _buildPostCard(doc.id, data);
-          },
-        );
       },
     );
   }
@@ -931,11 +1009,11 @@ class VideoPlayerWidget extends StatefulWidget {
   final VoidCallback onDoubleTap;
 
   const VideoPlayerWidget({
-    Key? key,
+    super.key,
     required this.videoUrl,
     required this.postId,
     required this.onDoubleTap,
-  }) : super(key: key);
+  });
 
   @override
   State<VideoPlayerWidget> createState() => _VideoPlayerWidgetState();

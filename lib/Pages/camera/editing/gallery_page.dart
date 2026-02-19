@@ -17,7 +17,7 @@ class _GalleryPageState extends State<GalleryPage> {
   List<FileSystemEntity> _mediaFiles = [];
   bool _isLoading = true;
   bool _isSelectionMode = false;
-  Set<String> _selectedFiles = {};
+  final Set<String> _selectedFiles = {};
 
   @override
   void initState() {

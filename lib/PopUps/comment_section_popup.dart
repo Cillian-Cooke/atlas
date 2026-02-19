@@ -7,10 +7,10 @@ class CommentSectionPopup extends StatefulWidget {
   final String postOwnerId;
 
   const CommentSectionPopup({
-    Key? key,
+    super.key,
     required this.postId,
     required this.postOwnerId,
-  }) : super(key: key);
+  });
 
   @override
   State<CommentSectionPopup> createState() => _CommentSectionPopupState();
@@ -491,7 +491,7 @@ class _CommentItem extends StatefulWidget {
   final String postOwnerId;
 
   const _CommentItem({
-    Key? key,
+    super.key,
     required this.commentId,
     required this.postId,
     required this.userId,
@@ -505,7 +505,7 @@ class _CommentItem extends StatefulWidget {
     required this.onReplyTap,
     required this.currentUserId,
     required this.postOwnerId,
-  }) : super(key: key);
+  });
 
   @override
   State<_CommentItem> createState() => _CommentItemState();
@@ -702,10 +702,10 @@ class _RepliesSection extends StatelessWidget {
   final String parentCommentId;
 
   const _RepliesSection({
-    Key? key,
+    super.key,
     required this.postId,
     required this.parentCommentId,
-  }) : super(key: key);
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -762,7 +762,7 @@ class _ReplyItem extends StatelessWidget {
   final Timestamp? createdAt;
 
   const _ReplyItem({
-    Key? key,
+    super.key,
     required this.replyId,
     required this.postId,
     required this.parentCommentId,
@@ -771,7 +771,7 @@ class _ReplyItem extends StatelessWidget {
     required this.text,
     required this.likesCount,
     required this.createdAt,
-  }) : super(key: key);
+  });
 
   String _getTimeAgo(DateTime dateTime) {
     final now = DateTime.now();
@@ -814,7 +814,7 @@ class _ReplyItem extends StatelessWidget {
         final replySnapshot = await transaction.get(replyRef);
         if (!replySnapshot.exists) return;
 
-        final replyData = replySnapshot.data() as Map<String, dynamic>?;
+        final replyData = replySnapshot.data();
         final currentCount = replyData?['likesCount'] ?? 0;
 
         if (currentlyLiked) {

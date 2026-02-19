@@ -11,12 +11,12 @@ class BubbleSimulation extends StatefulWidget {
   final double mapHeight;
 
   const BubbleSimulation({
-    Key? key,
+    super.key,
     required this.bubbles,
     required this.labels,
     required this.mapWidth,
     required this.mapHeight,
-  }) : super(key: key);
+  });
 
   @override
   BubbleSimulationState createState() => BubbleSimulationState();

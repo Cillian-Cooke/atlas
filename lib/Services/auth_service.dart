@@ -73,6 +73,8 @@ class AuthService {
           'followers': [],
           'following': [],
           'groups': [],
+          // Seen posts feature
+          'unseenPostsOnly': false,
         });
       } else {
         // Update existing user
