@@ -203,6 +203,20 @@ class HomePageState extends State<HomePage> with TickerProviderStateMixin {
         roguePostsEnabled = true; // Default to true
       }
 
+      // Get unseenPostsOnly flag and seen posts list
+      bool unseenPostsOnly = false;
+      List<String> seenPostIds = [];
+      try {
+        unseenPostsOnly = await _postService.getUnseenPostsOnlyFlag();
+        if (unseenPostsOnly) {
+          seenPostIds = await _postService.getSeenPostIds();
+        }
+      } catch (e) {
+        print('Error getting unseen posts filter: $e');
+        unseenPostsOnly = false;
+        seenPostIds = [];
+      }
+
       final generator = FirestoreBubbleGenerator(
         mapWidth: mapSize,
         mapHeight: mapSize,
@@ -210,6 +224,8 @@ class HomePageState extends State<HomePage> with TickerProviderStateMixin {
         labelUsernames: labelNames,
         labelUserIDs: labelNames,
         roguePostsEnabled: roguePostsEnabled,
+        unseenPostsOnly: unseenPostsOnly,
+        seenPostIds: seenPostIds,
       );
 
       final newBubbles = await generator.fetchBubbles()

@@ -10,6 +10,7 @@ import '../Widgets/icon_button.dart';
 import '../Widgets/dropdown_menu.dart';
 import '../Widgets/title_header.dart';
 import '../Widgets/zoom_slider.dart';
+import '../Services/post_service.dart';
 
 
 class UserMapPage extends StatefulWidget {
@@ -44,6 +45,7 @@ class _UserMapPageState extends State<UserMapPage> with TickerProviderStateMixin
   final GlobalKey _userHeaderKey = GlobalKey();
   
   DropdownMenuController? _dropdownController;
+  final PostService _postService = PostService();
 
   double _currentZoom = 1.0;
   bool _isLoadingBubbles = false;
@@ -124,6 +126,10 @@ class _UserMapPageState extends State<UserMapPage> with TickerProviderStateMixin
         );
       }
 
+      // Get unseenPostsOnly flag and seen posts for current user
+      final unseenPostsOnly = await _postService.getUnseenPostsOnlyFlag();
+      final seenPostIds = unseenPostsOnly ? await _postService.getSeenPostIds() : [];
+
       // Query all posts made by this user
       final postsQuery = await FirebaseFirestore.instance
           .collection('posts')
@@ -132,9 +138,14 @@ class _UserMapPageState extends State<UserMapPage> with TickerProviderStateMixin
 
       print('Found ${postsQuery.docs.length} posts by user');
 
+      // Filter out seen posts if unseenPostsOnly is enabled
+      final filteredDocs = unseenPostsOnly
+          ? postsQuery.docs.where((doc) => !seenPostIds.contains(doc.id)).toList()
+          : postsQuery.docs;
+
       // Create bubbles using shared logic
       final bubbleDataList = createBubblesFromPosts(
-        postsQuery.docs,
+        filteredDocs,
         _baseLabelNames,
         mapSize,
         mapSize,

@@ -35,6 +35,8 @@ class FirestoreBubbleGenerator {
   final List<String> labelUsernames; // Usernames from label list
   final List<String> labelUserIDs; // UserIDs from label list
   final bool roguePostsEnabled; // Enable rogue posts to fill space
+  final bool unseenPostsOnly; // If true, filter out seen posts
+  final List<String> seenPostIds; // List of post IDs the user has seen
 
   FirestoreBubbleGenerator({
     required this.mapWidth,
@@ -45,6 +47,8 @@ class FirestoreBubbleGenerator {
     this.minSize = 15,
     this.maxSize = 150,
     this.roguePostsEnabled = true,
+    this.unseenPostsOnly = false,
+    this.seenPostIds = const [],
   });
 
   /// Fetch bubbles from Firestore 'posts' collection
@@ -71,6 +75,11 @@ class FirestoreBubbleGenerator {
         try {
           final data = doc.data();
           final postId = doc.id;
+
+          // Skip seen posts if unseenPostsOnly is enabled
+          if (unseenPostsOnly && seenPostIds.contains(postId)) {
+            continue;
+          }
 
           // Extract tags array from post
           final List<dynamic>? tagsData = data['tags'];
@@ -173,6 +182,11 @@ class FirestoreBubbleGenerator {
           for (var doc in querySnapshot.docs) {
             try {
               if (usedPostIds.contains(doc.id)) continue;
+              
+              // Skip seen posts if unseenPostsOnly is enabled
+              if (unseenPostsOnly && seenPostIds.contains(doc.id)) {
+                continue;
+              }
 
               final data = doc.data();
               final int likes = (data['likesCount'] as num?)?.toInt() ?? 0;
