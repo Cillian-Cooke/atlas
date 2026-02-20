@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'camera_page.dart';
 import 'gallery_page.dart';
+import 'edit_posts_page.dart';
 
 /// Main menu for selecting between Camera mode or Gallery mode
 /// This is the entry point for content creation
@@ -70,6 +71,24 @@ class CameraMenuPage extends StatelessWidget {
                   context,
                   MaterialPageRoute(
                     builder: (context) => const GalleryPage(),
+                  ),
+                );
+              },
+            ),
+
+            const SizedBox(height: 24),
+
+            // Edit Posts Button
+            _MenuCard(
+              icon: Icons.edit,
+              iconColor: Colors.orange,
+              title: 'Edit Posts',
+              description: 'View and manage your posts',
+              onTap: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (context) => const EditPostsPage(),
                   ),
                 );
               },

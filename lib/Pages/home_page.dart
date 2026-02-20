@@ -327,6 +327,9 @@ class HomePageState extends State<HomePage> with TickerProviderStateMixin {
   }
 
   void _refreshBubbles() {
+    setState(() {
+      _setupLabels();
+    });
     _spawnBubblesFromFirestore();
   }
 
@@ -496,15 +499,6 @@ class HomePageState extends State<HomePage> with TickerProviderStateMixin {
                   child: CommandWheel(
                     items: [
                       CommandWheelItem(
-                        icon: Icons.edit,
-                        label: 'Edit',
-                        backgroundColor: Colors.blue.withOpacity(0.7),
-                        onSelected: () {
-                          print('Edit');
-                          _hideCommandWheel();
-                        },
-                      ),
-                      CommandWheelItem(
                         icon: Icons.compare_arrows,
                         label: 'Attract',
                         backgroundColor: Colors.red.withOpacity(0.7),
@@ -527,8 +521,8 @@ class HomePageState extends State<HomePage> with TickerProviderStateMixin {
                         label: 'Add Label',
                         backgroundColor: Colors.green.withOpacity(0.7),
                         onSelected: () {
-                          _hideCommandWheel();
                           _showAddLabelDialog();
+                          _hideCommandWheel();
                         },
                       ),
                     ],
