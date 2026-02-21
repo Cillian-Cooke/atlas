@@ -205,12 +205,12 @@ class _HomeTabState extends State<HomeTab> {
                 'Edit labels', 
                 current,
               );
-              if (updated != null && updated.isNotEmpty) {
-                // This will now save to Firestore automatically
-                _homePageKey.currentState?.updateLabelNames(updated);
+              if (updated != null && updated['items'] is List<String> && updated['items'].isNotEmpty) {
+                // This will now save to Firestore automatically (with toggles saved separately)
+                _homePageKey.currentState?.updateLabelNames(updated['items']);
                 if (context.mounted) {
                   ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(content: Text('Labels updated and saved: ${updated.join(", ")}')),
+                    SnackBar(content: Text('Labels updated and saved: ${updated['items'].join(", ")}')),
                   );
                 }
               }

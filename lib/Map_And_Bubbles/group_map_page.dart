@@ -4,12 +4,13 @@ import '../Map_And_Bubbles/map_logic.dart';
 import '../Map_And_Bubbles/bubble_data.dart';
 import '../Map_And_Bubbles/label_data.dart';
 import '../Map_And_Bubbles/bubble_simulation.dart';
+import '../Map_And_Bubbles/base_map_mixin.dart';
 import 'dart:async';
-import '../PopUps/edit/edit_map.dart';
 import '../Widgets/icon_button.dart';
 import '../Widgets/dropdown_menu.dart';
 import '../Widgets/title_header.dart';
 import '../Widgets/zoom_slider.dart';
+import '../Services/post_service.dart';
 
 
 
@@ -31,25 +32,48 @@ class GroupMapPage extends StatefulWidget {
   State<GroupMapPage> createState() => _GroupMapPageState();
 }
 
-class _GroupMapPageState extends State<GroupMapPage> with TickerProviderStateMixin {
+class _GroupMapPageState extends State<GroupMapPage> with TickerProviderStateMixin, BaseMapMixin {
   final List<Bubble> bubbles = [];
-  
+
   // Base labels from Firebase (immutable during session)
   List<String> _baseLabelNames = [];
-  
+
+  // Temporary filter settings (edited locally, not saved to Firebase)
+  bool _tempUnseenPostsOnly = false;
+  // Note: _tempRoguePostsEnabled is stored for future use with rogue posts filtering
+  bool _tempRoguePostsEnabled = true;
+
   // Current labels being displayed (can be edited locally)
   List<MapLabel> labels = [];
-  
+
   final GlobalKey<BubbleSimulationState> _simKey = GlobalKey();
   final GlobalKey<TiledMapViewerState> _mapViewerKey = GlobalKey();
   final GlobalKey _groupHeaderKey = GlobalKey();
-  
+
   DropdownMenuController? _dropdownController;
 
   double _currentZoom = 1.0;
   bool _isLoadingBubbles = false;
 
   late AnimationController _screenshotController;
+
+  // Implement mixin getters/setters
+  @override
+  GlobalKey<BubbleSimulationState> get simKey => _simKey;
+
+  @override
+  GlobalKey<TiledMapViewerState> get mapViewerKey => _mapViewerKey;
+
+  @override
+  AnimationController get screenshotController => _screenshotController;
+
+  @override
+  double get currentZoom => _currentZoom;
+
+  @override
+  set currentZoom(double value) {
+    _currentZoom = value;
+  }
 
   @override
   void initState() {
@@ -93,11 +117,9 @@ class _GroupMapPageState extends State<GroupMapPage> with TickerProviderStateMix
       bubbles.clear();
     });
 
-    const tileSize = 400.0;
-    const visibleTiles = 8;
-    final mapSize = tileSize * visibleTiles;
-
     try {
+      final postService = PostService();
+      
       // Get group document
       final groupDoc = await FirebaseFirestore.instance
           .collection('groups')
@@ -112,26 +134,30 @@ class _GroupMapPageState extends State<GroupMapPage> with TickerProviderStateMix
 
       final groupData = groupDoc.data() as Map<String, dynamic>;
       final postIds = List<String>.from(groupData['posts'] ?? []);
-      
+
       // Store base labels from Firebase
       _baseLabelNames = List<String>.from(groupData['labels'] ?? []);
 
       print('Loading ${postIds.length} posts and ${_baseLabelNames.length} labels for group ${widget.groupName}');
 
-      // Setup labels from group - this creates the initial working copy
+      // Setup labels from group using mixin method
       if (_baseLabelNames.isNotEmpty) {
-        labels = generateGeometricLabels(
-          names: _baseLabelNames,
-          mapWidth: mapSize,
-          mapHeight: mapSize,
-          radius: 600,
-        );
+        setupLabels(_baseLabelNames);
       }
+
+      // Use temporary filter settings (these override any saved settings for this session)
+      final unseenPostsOnly = _tempUnseenPostsOnly;
+      final seenPostIds = unseenPostsOnly ? await postService.getSeenPostIds() : [];
 
       // Fetch all posts and create bubbles
       final List<DocumentSnapshot<Map<String, dynamic>>> postDocs = [];
-      
+
       for (final postId in postIds) {
+        // Skip if this post has been seen and unseenPostsOnly is enabled
+        if (unseenPostsOnly && seenPostIds.contains(postId)) {
+          continue;
+        }
+        
         try {
           final postDoc = await FirebaseFirestore.instance
               .collection('posts')
@@ -146,34 +172,11 @@ class _GroupMapPageState extends State<GroupMapPage> with TickerProviderStateMix
         }
       }
 
-      // Create bubbles using shared logic
-      final bubbleDataList = createBubblesFromPosts(
-        postDocs,
-        _baseLabelNames,
-        mapSize,
-        mapSize,
-      );
+      // Create bubbles using mixin method
+      final bubbleDataList = createBubblesDataFromPosts(postDocs, _baseLabelNames);
 
-      // Instantiate bubbles with calculated data
-      for (final bubbleData in bubbleDataList) {
-        try {
-          final bubble = Bubble(
-            position: Offset(bubbleData['x'], bubbleData['y']),
-            velocity: Offset.zero,
-            size: bubbleData['size'],
-            color: bubbleData['color'],
-            tag: bubbleData['tag'],
-            postId: bubbleData['postId'],
-          );
-
-          if (mounted) {
-            setState(() => bubbles.add(bubble));
-            await Future.delayed(const Duration(milliseconds: 50));
-          }
-        } catch (e) {
-          print('Error creating bubble: $e');
-        }
-      }
+      // Instantiate bubbles using mixin method
+      await instantiateBubblesFromData(bubbleDataList);
     } catch (e) {
       print('Error loading group data: $e');
     } finally {
@@ -183,116 +186,25 @@ class _GroupMapPageState extends State<GroupMapPage> with TickerProviderStateMix
     }
   }
 
-  Color _getColorFromTagIndex(int tagIndex) {
-    const palette = [
-      Colors.red,
-      Colors.blue,
-      Colors.green,
-      Colors.purple,
-      Colors.orange,
-      Colors.teal,
-      Colors.pink,
-    ];
-    return palette[tagIndex % palette.length];
-  }
-
   /// Handle local label editing - updates labels without touching Firebase
   void _handleLabelEdit() async {
-    // Get current label names
-    final currentLabelNames = labels.map((l) => l.name).toList();
+    final tempSettings = await handleLabelEdit('Edit Group Map', 'Edit Labels (Temporary)');
     
-    // Show edit popup
-    final updatedLabelNames = await showEditMapPagePopUp(
-      context,
-      'Edit Group',
-      'Edit Labels (Local Only)',
-      currentLabelNames,
-    );
-
-    // If user saved changes, update local labels
-    if (updatedLabelNames != null && updatedLabelNames.isNotEmpty) {
+    // Store temporary settings
+    if (tempSettings['items'].isNotEmpty) {
       setState(() {
-        const tileSize = 400.0;
-        const visibleTiles = 8;
-        final mapSize = tileSize * visibleTiles;
-
-        // Regenerate labels with new names
-        labels = generateGeometricLabels(
-          names: updatedLabelNames,
-          mapWidth: mapSize,
-          mapHeight: mapSize,
-          radius: 600,
-        );
-
-        // Optionally: You could also update bubble colors here based on new label arrangement
-        // This would make bubbles re-color based on the new label order
-        _updateBubbleColorsForNewLabels(updatedLabelNames);
+        _tempUnseenPostsOnly = tempSettings['isUnseen'] ?? false;
+        _tempRoguePostsEnabled = tempSettings['isRogue'] ?? true;
+        print('Temp filters set - Unseen: $_tempUnseenPostsOnly, Rogue: $_tempRoguePostsEnabled');
       });
-
-      print('Labels updated locally: $updatedLabelNames');
-      print('Base labels remain unchanged: $_baseLabelNames');
-    }
-  }
-
-  /// Update bubble colors based on new label arrangement
-  void _updateBubbleColorsForNewLabels(List<String> newLabelNames) {
-    // Create new bubbles with updated colors
-    final updatedBubbles = <Bubble>[];
-    
-    for (var bubble in bubbles) {
-      final tagIndex = newLabelNames.indexOf(bubble.tag);
-      final newColor = tagIndex >= 0 ? _getColorFromTagIndex(tagIndex) : Colors.grey;
       
-      // Create a new bubble with the updated color
-      final updatedBubble = Bubble(
-        position: bubble.position,
-        velocity: bubble.velocity,
-        size: bubble.size,
-        color: newColor,
-        tag: bubble.tag,
-        postId: bubble.postId,
-      );
-      
-      updatedBubbles.add(updatedBubble);
+      // Reload bubbles with new temporary filters
+      await _loadGroupData();
     }
-    
-    // Replace the bubbles list
-    bubbles.clear();
-    bubbles.addAll(updatedBubbles);
   }
 
   void _captureVisibleBubbles() {
-    final mapViewerState = _mapViewerKey.currentState;
-    if (mapViewerState == null) return;
-
-    final visibleBounds = mapViewerState.getVisibleBounds();
-    final visiblePostIds = <String>[];
-
-    // Collect all visible bubble post IDs
-    for (final b in bubbles) {
-      final r = b.radius;
-      if (b.position.dx - r < visibleBounds.right &&
-          b.position.dx + r > visibleBounds.left &&
-          b.position.dy - r < visibleBounds.bottom &&
-          b.position.dy + r > visibleBounds.top) {
-        if (b.postId.isNotEmpty) {
-          visiblePostIds.add(b.postId);
-        }
-      }
-    }
-
-    // Quick flash animation (optional - can be removed)
-    _screenshotController.forward().then((_) {
-      _screenshotController.reverse();
-    });
-
-    // Debug output
-    print('Captured ${visiblePostIds.length} post IDs: $visiblePostIds');
-
-    // Immediately pop with the captured post IDs (like HomePage)
-    if (visiblePostIds.isNotEmpty) {
-      Navigator.pop(context, visiblePostIds);
-    }
+    captureVisibleBubbles();
   }
 
   @override

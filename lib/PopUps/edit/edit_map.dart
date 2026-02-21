@@ -5,14 +5,18 @@ class EditMapPopUpContent extends StatefulWidget {
   final String title;
   final String description;
   final List<String> items;
-  final void Function(List<String>) onListUpdated;
+  final bool initialUnseen;
+  final bool initialRogue;
+  final void Function(Map<String, dynamic>) onConfigUpdated;
 
   const EditMapPopUpContent({
     super.key,
     required this.title,
     required this.description,
     required this.items,
-    required this.onListUpdated,
+    this.initialUnseen = true,
+    this.initialRogue = true,
+    required this.onConfigUpdated,
   });
 
   @override
@@ -38,6 +42,8 @@ class _EditMapPopUpContentState extends State<EditMapPopUpContent> {
   void initState() {
     super.initState();
     items = List.from(widget.items);
+    isUnseen = widget.initialUnseen;
+    isRogue = widget.initialRogue;
   }
 
   void _showEditMapListDialog() {
@@ -116,7 +122,12 @@ class _EditMapPopUpContentState extends State<EditMapPopUpContent> {
                   });
                   // Close the inner edit dialog first, then notify the outer popup
                   Navigator.pop(context);
-                  widget.onListUpdated(items);
+                  // Return configuration with items and toggles
+                  widget.onConfigUpdated({
+                    'items': items,
+                    'isUnseen': isUnseen,
+                    'isRogue': isRogue,
+                  });
                 },
                 child: const Text('Save'),
               ),
@@ -357,13 +368,15 @@ class _EditMapPopUpContentState extends State<EditMapPopUpContent> {
 }
 
 // POPUP OPEN FUNCTION
-Future<List<String>?> showEditMapPagePopUp(
+Future<Map<String, dynamic>?> showEditMapPagePopUp(
   BuildContext context,
   String title,
   String description,
-  List<String> items,
-) {
-  return showDialog<List<String>>(
+  List<String> items, {
+  bool initialUnseen = true,
+  bool initialRogue = true,
+}) {
+  return showDialog<Map<String, dynamic>>(
     context: context,
     barrierDismissible: true,
     barrierColor: Colors.black54,
@@ -373,8 +386,10 @@ Future<List<String>?> showEditMapPagePopUp(
           title: title,
           description: description,
           items: items,
-          onListUpdated: (updatedItems) {
-            Navigator.pop(context, updatedItems);
+          initialUnseen: initialUnseen,
+          initialRogue: initialRogue,
+          onConfigUpdated: (config) {
+            Navigator.pop(context, config);
           },
         ),
       );
