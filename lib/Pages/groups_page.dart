@@ -66,48 +66,63 @@ class _GroupsPageState extends State<GroupsPage> {
   @override
   Widget build(BuildContext context) {
     final size = MediaQuery.of(context).size;
+    final headerHeight = 120.0; // Space for header and menu button
 
     return Scaffold(
       body: Stack(
         children: [
-          TiledMapViewer(
-            backgroundAsset: Theme.of(context).brightness == Brightness.dark
-                ? 'assets/background_dark.png' 
-                : 'assets/background_light.png',
+          // Background map - full screen
+          SizedBox(
+            width: size.width,
+            height: size.height,
+            child: TiledMapViewer(
+              backgroundAsset: Theme.of(context).brightness == Brightness.dark
+                  ? 'assets/background_dark.png' 
+                  : 'assets/background_light.png',
+            ),
           ),
-          const Spacer(),
-          Center(
-            child: SizedBox(
-              width: size.width * 0.8,
-              height: size.height * 0.8,
-              child: isLoading
-              ? Center(
-                  child: CircularProgressIndicator(
-                    color: Theme.of(context).brightness == Brightness.dark ? Colors.white : Colors.black,
-                  ),
-                )
-              : GridView.builder(
-                  padding: EdgeInsets.zero,
-                  gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                    crossAxisCount: 2,
-                    crossAxisSpacing: 12,
-                    mainAxisSpacing: 12,
-                  ),
-                  itemCount: userGroups.isEmpty ? 1 : userGroups.length + 1, // +1 for "Add Group" button
-                  itemBuilder: (context, index) {
-                    // If no groups and this is the only item, show the add group button
-                    if (userGroups.isEmpty) {
-                      return _buildAddGroupButton();
-                    }
-                    // Last item is the "Add Group" button
-                    if (index == userGroups.length) {
-                      return _buildAddGroupButton();
-                    }
-                    // Regular group tiles
-                    final group = userGroups[index];
-                    return _buildGroupTile(group['id'], group['data']);
-                  },
-                ),
+          
+          // GridView positioned with proper padding from the top
+          Positioned(
+            top: headerHeight,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            child: Center(
+              child: SizedBox(
+                width: size.width * 0.9,
+                height: size.height - headerHeight,
+                child: isLoading
+                    ? Center(
+                        child: CircularProgressIndicator(
+                          color: Theme.of(context).brightness == Brightness.dark 
+                              ? Colors.white 
+                              : Colors.black,
+                        ),
+                      )
+                    : GridView.builder(
+                        padding: const EdgeInsets.all(8),
+                        gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                          crossAxisCount: 2,
+                          crossAxisSpacing: 12,
+                          mainAxisSpacing: 12,
+                        ),
+                        itemCount: userGroups.isEmpty ? 1 : userGroups.length + 1, // +1 for "Add Group" button
+                        itemBuilder: (context, index) {
+                          // If no groups and this is the only item, show the add group button
+                          if (userGroups.isEmpty) {
+                            return _buildAddGroupButton();
+                          }
+                          // Last item is the "Add Group" button
+                          if (index == userGroups.length) {
+                            return _buildAddGroupButton();
+                          }
+                          // Regular group tiles
+                          final group = userGroups[index];
+                          return _buildGroupTile(group['id'], group['data']);
+                        },
+                      ),
+              ),
             ),
           )
         ],
