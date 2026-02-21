@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:cached_network_image/cached_network_image.dart';
 import 'popup_container.dart';
 import '../Widgets/description_box.dart';
 
@@ -21,6 +22,7 @@ class _MapMenuPopUpContentState extends State<MapMenuPopUpContent> {
   String _username = '';
   String _userID = '';
   String _bio = '';
+  String? _profileImageUrl;
   int _followers = 0;
   int _following = 0;
   int _posts = 0;
@@ -50,6 +52,12 @@ class _MapMenuPopUpContentState extends State<MapMenuPopUpContent> {
             
             // Get bio
             _bio = data['bio'] ?? data['description'] ?? 'No bio available';
+            
+            // Get profile image URL
+            final imageUrl = data['profileImageUrl'];
+            if (imageUrl is String && imageUrl.isNotEmpty) {
+              _profileImageUrl = imageUrl;
+            }
             
             // Get followers, following, posts
             _followers = data['followersCount'] ?? 0;
@@ -111,7 +119,26 @@ class _MapMenuPopUpContentState extends State<MapMenuPopUpContent> {
             decoration: BoxDecoration(
               color: Colors.blue,
               shape: BoxShape.circle,
+              border: Border.all(color: Colors.white, width: 3),
             ),
+            child: _profileImageUrl != null && _profileImageUrl!.isNotEmpty
+                ? ClipOval(
+                    child: CachedNetworkImage(
+                      imageUrl: _profileImageUrl!,
+                      fit: BoxFit.cover,
+                      placeholder: (context, url) => Container(
+                        color: Colors.grey[300],
+                        child: const Icon(Icons.person, size: 80, color: Colors.grey),
+                      ),
+                      errorWidget: (context, url, error) => Container(
+                        color: Colors.grey[300],
+                        child: const Icon(Icons.person, size: 80, color: Colors.grey),
+                      ),
+                    ),
+                  )
+                : const Center(
+                    child: Icon(Icons.person, size: 80, color: Colors.white),
+                  ),
           ),
           Flexible(
             child: Text(

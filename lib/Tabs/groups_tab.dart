@@ -25,7 +25,8 @@ class GroupsTab extends StatefulWidget {
 
 class _GroupsTabState extends State<GroupsTab> {
   String? _username;
-  String? _usersID;
+  String? _profileSubheading;
+  String? _profileImageUrl;
   bool _isLoading = true;
   final GlobalKey _profileHeaderKey = GlobalKey();
   DropdownMenuController? _dropdownController;
@@ -80,7 +81,8 @@ class _GroupsTabState extends State<GroupsTab> {
         setState(() {
           final data = doc.data();
           String username = 'Unknown User';
-          String userIdFromFirestore = 'Unknown User';
+          String profileSubheading = 'Complete your profile';
+          String? profileImageUrl;
 
           if (data is Map<String, dynamic>) {
             final usernameFromFirestore = data['username'];
@@ -88,14 +90,20 @@ class _GroupsTabState extends State<GroupsTab> {
               username = usernameFromFirestore;
             }
 
-            final usersID = data['userID'] ?? data['ID'] ?? data['UserID'];
-            if (usersID is String && usersID.isNotEmpty) {
-              userIdFromFirestore = usersID;
+            final subheading = data['profileSubheading'];
+            if (subheading is String && subheading.isNotEmpty) {
+              profileSubheading = subheading;
+            }
+
+            final imageUrl = data['profileImageUrl'];
+            if (imageUrl is String && imageUrl.isNotEmpty) {
+              profileImageUrl = imageUrl;
             }
           }
 
           _username = username;
-          _usersID = userIdFromFirestore;
+          _profileSubheading = profileSubheading;
+          _profileImageUrl = profileImageUrl;
           _isLoading = false;
         });
       }
@@ -103,7 +111,8 @@ class _GroupsTabState extends State<GroupsTab> {
       if (mounted) {
         setState(() {
           _username = "Error loading";
-          _usersID = "Error loading";
+          _profileSubheading = "Error loading";
+          _profileImageUrl = null;
           _isLoading = false;
         });
       }
@@ -150,7 +159,8 @@ class _GroupsTabState extends State<GroupsTab> {
           child: ProfileHeaderWidget(
             key: _profileHeaderKey,
             header: _isLoading ? "Loading..." : (_username ?? "No username"),
-            subheading: _isLoading ? "Loading..." : (_usersID ?? "No ID"),
+            subheading: _isLoading ? "Loading..." : (_profileSubheading ?? "Complete your profile"),
+            profileImageUrl: _profileImageUrl,
             onTap: () => _showDropdownMenu([
               DropdownMenuItemData(
                 label: 'Profile Map',

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:cached_network_image/cached_network_image.dart';
 
 class ProfileHeaderWidget extends StatelessWidget {
   final String header;
@@ -12,6 +13,7 @@ class ProfileHeaderWidget extends StatelessWidget {
   final double circleSize;
   final double headerFontSize;
   final double subheadingFontSize;
+  final String? profileImageUrl;
 
   const ProfileHeaderWidget({
     super.key,
@@ -26,6 +28,7 @@ class ProfileHeaderWidget extends StatelessWidget {
     this.circleSize = 40,
     this.headerFontSize = 15,
     this.subheadingFontSize = 10,
+    this.profileImageUrl,
   });
 
   @override
@@ -58,7 +61,26 @@ class ProfileHeaderWidget extends StatelessWidget {
               decoration: BoxDecoration(
                 color: circleColor,
                 shape: BoxShape.circle,
+                border: Border.all(color: Colors.white, width: 2),
               ),
+              child: profileImageUrl != null && profileImageUrl!.isNotEmpty
+                  ? ClipOval(
+                      child: CachedNetworkImage(
+                        imageUrl: profileImageUrl!,
+                        fit: BoxFit.cover,
+                        placeholder: (context, url) => Container(
+                          color: Colors.grey[300],
+                          child: const Icon(Icons.person, color: Colors.grey),
+                        ),
+                        errorWidget: (context, url, error) => Container(
+                          color: Colors.grey[300],
+                          child: const Icon(Icons.person, color: Colors.grey),
+                        ),
+                      ),
+                    )
+                  : const Center(
+                      child: Icon(Icons.person, color: Colors.white),
+                    ),
             ),
             Column(
               mainAxisAlignment: MainAxisAlignment.center,

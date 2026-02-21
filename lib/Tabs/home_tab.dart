@@ -31,7 +31,8 @@ class HomeTab extends StatefulWidget {
 
 class _HomeTabState extends State<HomeTab> {
   String? _username;
-  String? _usersID;
+  String? _profileSubheading;
+  String? _profileImageUrl;
   bool _isLoading = true;
   final GlobalKey<HomePageState> _homePageKey = GlobalKey<HomePageState>();
   final GlobalKey _profileHeaderKey = GlobalKey();
@@ -82,7 +83,8 @@ class _HomeTabState extends State<HomeTab> {
         setState(() {
           final data = doc.data();
           String username = 'Unknown User';
-          String userIdFromFirestore = 'Unknown User';
+          String profileSubheading = 'Complete your profile';
+          String? profileImageUrl;
 
           if (data is Map<String, dynamic>) {
             final usernameFromFirestore = data['username'];
@@ -90,17 +92,23 @@ class _HomeTabState extends State<HomeTab> {
               username = usernameFromFirestore;
             }
 
-            final usersID = data['userID'] ?? data['ID'] ?? data['UserID'];
-            if (usersID is String && usersID.isNotEmpty) {
-              userIdFromFirestore = usersID;
+            final subheading = data['profileSubheading'];
+            if (subheading is String && subheading.isNotEmpty) {
+              profileSubheading = subheading;
+            }
+
+            final imageUrl = data['profileImageUrl'];
+            if (imageUrl is String && imageUrl.isNotEmpty) {
+              profileImageUrl = imageUrl;
             }
           }
 
           print("Fetched user data: $data");
-          print("Username: $username, UserID: $userIdFromFirestore");
+          print("Username: $username, Subheading: $profileSubheading, Image: $profileImageUrl");
 
           _username = username;
-          _usersID = userIdFromFirestore;
+          _profileSubheading = profileSubheading;
+          _profileImageUrl = profileImageUrl;
           _isLoading = false;
         });
       }
@@ -108,7 +116,8 @@ class _HomeTabState extends State<HomeTab> {
       if (mounted) {
         setState(() {
           _username = "Error loading";
-          _usersID = "Error loading";
+          _profileSubheading = "Error loading";
+          _profileImageUrl = null;
           _isLoading = false;
         });
       }
@@ -226,7 +235,8 @@ class _HomeTabState extends State<HomeTab> {
           child: ProfileHeaderWidget(
             key: _profileHeaderKey,
             header: _isLoading ? "Loading..." : (_username ?? "No username"),
-            subheading: _isLoading ? "Loading..." : (_usersID ?? "No ID"),
+            subheading: _isLoading ? "Loading..." : (_profileSubheading ?? "Complete your profile"),
+            profileImageUrl: _profileImageUrl,
             onTap: () => _showDropdownMenu([
               DropdownMenuItemData(
                 label: 'Profile Map',
