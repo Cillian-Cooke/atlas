@@ -25,6 +25,38 @@ class Bubble {
   double get radius => size / 2;
 }
 
+/// Parses label names and separates them into tags, usernames, and userIDs
+/// Labels with @ prefix are treated as usernames
+/// Labels with # prefix are treated as tags
+/// Regular labels (no prefix) are treated as usernames for backward compatibility
+class LabelParser {
+  static Map<String, List<String>> parseLabelNames(List<String> labelNames) {
+    final tags = <String>[];
+    final usernames = <String>[];
+    
+    for (final label in labelNames) {
+      if (label.startsWith('#')) {
+        // Extract tag without the # prefix
+        final tag = label.substring(1);
+        if (tag.isNotEmpty) tags.add(tag);
+      } else if (label.startsWith('@')) {
+        // Extract username without the @ prefix
+        final username = label.substring(1);
+        if (username.isNotEmpty) usernames.add(username);
+      } else {
+        // Treat as username (backward compatibility for non-prefixed labels)
+        if (label.isNotEmpty) usernames.add(label);
+      }
+    }
+    
+    return {
+      'tags': tags,
+      'usernames': usernames,
+      'userIds': usernames, // Use usernames as fallback for user IDs
+    };
+  }
+}
+
 /// Fetches bubbles from Firestore based on label filters
 class FirestoreBubbleGenerator {
   final double mapWidth;
@@ -336,6 +368,11 @@ List<Map<String, dynamic>> createBubblesFromPosts(
   final List<Map<String, dynamic>> postDataList = [];
   final random = Random();
 
+  // Parse labels to separate tags and usernames
+  final parsedLabels = LabelParser.parseLabelNames(baseLabelNames);
+  final List<String> labelTags = parsedLabels['tags'] ?? [];
+  final List<String> labelUsernames = parsedLabels['usernames'] ?? [];
+
   // First pass: collect likes counts and post data
   for (final postDoc in postDocs) {
     final postData = postDoc.data();
@@ -367,28 +404,36 @@ List<Map<String, dynamic>> createBubblesFromPosts(
 
       // Determine which label this post should be attracted to
       String primaryTag = '';
+      int tagIndexInList = -1;
 
-      // Priority: userID > username > tags (matching against baseLabelNames)
-      if (postUserID != null && baseLabelNames.contains(postUserID)) {
-        primaryTag = postUserID;
-      } else if (postUsername != null && baseLabelNames.contains(postUsername)) {
+      // Priority: @username and userID > #tag (matching against parsed labels)
+      
+      // Check if post's username matches a label username (either raw or @-prefixed)
+      if (postUsername != null && labelUsernames.contains(postUsername)) {
         primaryTag = postUsername;
-      } else {
-        // Check if any post tag matches a label
+        tagIndexInList = labelUsernames.indexOf(postUsername);
+      } 
+      // Check if post's userID matches a label username (for cases stored as ID)
+      else if (postUserID != null && labelUsernames.contains(postUserID)) {
+        primaryTag = postUserID;
+        tagIndexInList = labelUsernames.indexOf(postUserID);
+      }
+      // Check if any post tag matches a label tag (either raw or #-prefixed)
+      else {
         for (final tag in postTags) {
-          if (baseLabelNames.contains(tag)) {
+          if (labelTags.contains(tag)) {
             primaryTag = tag;
+            tagIndexInList = labelTags.indexOf(tag);
             break;
           }
         }
       }
 
       // Get color and size based on likes
-      final tagIndex = baseLabelNames.indexOf(primaryTag);
-      // If no valid tag found, use grey; otherwise use color from palette
-      final color = (primaryTag.isEmpty || tagIndex < 0)
+      // Use tagIndexInList to match colors with the original label order
+      final color = (primaryTag.isEmpty || tagIndexInList < 0)
           ? Colors.grey
-          : _getColorFromTagIndex(tagIndex);
+          : _getColorFromTagIndex(tagIndexInList);
       final size = calculateBubbleSizeFromLikes(likes, allLikesCounts);
 
       bubbleDataList.add({

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../popup_container.dart';
+import '../../Services/autocomplete_service.dart';
 
 class EditMapPopUpContent extends StatefulWidget {
   final String title;
@@ -49,6 +50,7 @@ class _EditMapPopUpContentState extends State<EditMapPopUpContent> {
   void _showEditMapListDialog() {
     List<String> editableItems = List.from(items);
     TextEditingController controller = TextEditingController();
+    final autocompleteService = AutocompleteService();
 
     showDialog(
       context: context,
@@ -81,31 +83,17 @@ class _EditMapPopUpContentState extends State<EditMapPopUpContent> {
                     ),
                   ),
                   const SizedBox(height: 10),
-                  Row(
-                    children: [
-                      Expanded(
-                        child: TextField(
-                          controller: controller,
-                          decoration: const InputDecoration(
-                            labelText: 'Add item',
-                            border: OutlineInputBorder(),
-                          ),
-                        ),
-                      ),
-                      const SizedBox(width: 8),
-                      ElevatedButton(
-                        onPressed: () {
-                          final text = controller.text.trim();
-                          if (text.isNotEmpty) {
-                            setStateDialog(() {
-                              editableItems.add(text);
-                              controller.clear();
-                            });
-                          }
-                        },
-                        child: const Text('Add'),
-                      ),
-                    ],
+                  _buildAutocompleteInput(
+                    controller: controller,
+                    autocompleteService: autocompleteService,
+                    onItemAdded: (text) {
+                      setStateDialog(() {
+                        if (text.isNotEmpty && !editableItems.contains(text)) {
+                          editableItems.add(text);
+                          controller.clear();
+                        }
+                      });
+                    },
                   ),
                 ],
               ),
@@ -134,6 +122,138 @@ class _EditMapPopUpContentState extends State<EditMapPopUpContent> {
             ],
           );
         });
+      },
+    );
+  }
+
+  /// Build autocomplete input widget
+  Widget _buildAutocompleteInput({
+    required TextEditingController controller,
+    required AutocompleteService autocompleteService,
+    required Function(String) onItemAdded,
+  }) {
+    return StatefulBuilder(
+      builder: (context, setStateAutocomplete) {
+        List<String> suggestions = [];
+        bool showSuggestions = false;
+
+        return Column(
+          children: [
+            TextField(
+              controller: controller,
+              decoration: InputDecoration(
+                labelText: 'Add item (@username or #tag)',
+                hintText: 'Type @ for users, # for tags',
+                border: const OutlineInputBorder(),
+                suffixIcon: controller.text.isNotEmpty
+                    ? IconButton(
+                        icon: const Icon(Icons.clear),
+                        onPressed: () {
+                          controller.clear();
+                          setStateAutocomplete(() {
+                            showSuggestions = false;
+                          });
+                        },
+                      )
+                    : null,
+              ),
+              onChanged: (value) async {
+                setStateAutocomplete(() {
+                  showSuggestions = false;
+                  suggestions = [];
+                });
+
+                // Detect @ or # and show autocomplete
+                if (value.contains('@')) {
+                  final lastAtIndex = value.lastIndexOf('@');
+                  if (lastAtIndex != -1) {
+                    final query = value.substring(lastAtIndex + 1);
+                    if (query.isNotEmpty && query.length >= 1) {
+                      final users = await autocompleteService.searchUsers(query);
+                      setStateAutocomplete(() {
+                        suggestions = users;
+                        showSuggestions = suggestions.isNotEmpty;
+                      });
+                    }
+                  }
+                } else if (value.contains('#')) {
+                  final lastHashIndex = value.lastIndexOf('#');
+                  if (lastHashIndex != -1) {
+                    final query = value.substring(lastHashIndex + 1);
+                    if (query.isNotEmpty && query.length >= 1) {
+                      final tags = await autocompleteService.searchTags(query);
+                      setStateAutocomplete(() {
+                        suggestions = tags;
+                        showSuggestions = suggestions.isNotEmpty;
+                      });
+                    }
+                  }
+                }
+              },
+              onSubmitted: (value) {
+                final text = value.trim();
+                if (text.isNotEmpty) {
+                  onItemAdded(text);
+                  setStateAutocomplete(() {
+                    showSuggestions = false;
+                    suggestions = [];
+                  });
+                }
+              },
+            ),
+            const SizedBox(height: 8),
+            if (showSuggestions && suggestions.isNotEmpty)
+              Container(
+                decoration: BoxDecoration(
+                  border: Border.all(color: Colors.grey),
+                  borderRadius: BorderRadius.circular(4),
+                ),
+                constraints: const BoxConstraints(maxHeight: 150),
+                child: ListView.builder(
+                  shrinkWrap: true,
+                  itemCount: suggestions.length,
+                  itemBuilder: (context, index) {
+                    final suggestion = suggestions[index];
+                    return ListTile(
+                      dense: true,
+                      title: Text(
+                        controller.text.contains('@') ? '@$suggestion' : '#$suggestion',
+                        style: const TextStyle(fontSize: 14),
+                      ),
+                      onTap: () {
+                        onItemAdded(controller.text.contains('@') ? '@$suggestion' : '#$suggestion');
+                        controller.clear();
+                        setStateAutocomplete(() {
+                          showSuggestions = false;
+                          suggestions = [];
+                        });
+                      },
+                    );
+                  },
+                ),
+              ),
+            const SizedBox(height: 8),
+            Row(
+              children: [
+                Expanded(
+                  child: ElevatedButton(
+                    onPressed: () {
+                      final text = controller.text.trim();
+                      if (text.isNotEmpty) {
+                        onItemAdded(text);
+                        setStateAutocomplete(() {
+                          showSuggestions = false;
+                          suggestions = [];
+                        });
+                      }
+                    },
+                    child: const Text('Add'),
+                  ),
+                ),
+              ],
+            ),
+          ],
+        );
       },
     );
   }

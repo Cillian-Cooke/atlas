@@ -6,6 +6,7 @@ import '../Map_And_Bubbles/label_data.dart';
 import '../Map_And_Bubbles/bubble_simulation.dart';
 import '../Widgets/command_wheel.dart';
 import '../Services/post_service.dart';
+import '../Services/autocomplete_service.dart';
 import 'dart:async';
 import 'dart:math' as math;
 
@@ -217,12 +218,15 @@ class HomePageState extends State<HomePage> with TickerProviderStateMixin {
         seenPostIds = [];
       }
 
+      // Parse labels to separate tags and usernames
+      final parsedLabels = LabelParser.parseLabelNames(labelNames);
+      
       final generator = FirestoreBubbleGenerator(
         mapWidth: mapSize,
         mapHeight: mapSize,
-        labelTags: labelNames,
-        labelUsernames: labelNames,
-        labelUserIDs: labelNames,
+        labelTags: parsedLabels['tags'] ?? [],
+        labelUsernames: parsedLabels['usernames'] ?? [],
+        labelUserIDs: parsedLabels['userIds'] ?? [],
         roguePostsEnabled: roguePostsEnabled,
         unseenPostsOnly: unseenPostsOnly,
         seenPostIds: seenPostIds,
@@ -335,25 +339,116 @@ class HomePageState extends State<HomePage> with TickerProviderStateMixin {
 
   void _showAddLabelDialog() {
     final labelController = TextEditingController();
+    final autocompleteService = AutocompleteService();
     
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
         title: const Text('Add New Label'),
-        content: TextField(
-          controller: labelController,
-          decoration: const InputDecoration(
-            hintText: 'Enter label name',
-            border: OutlineInputBorder(),
+        content: SizedBox(
+          width: 300,
+          child: StatefulBuilder(
+            builder: (context, setStateDialog) {
+              List<String> suggestions = [];
+              bool showSuggestions = false;
+
+              return Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  TextField(
+                    controller: labelController,
+                    decoration: InputDecoration(
+                      hintText: 'Enter label (@username or #tag)',
+                      border: const OutlineInputBorder(),
+                      suffixIcon: labelController.text.isNotEmpty
+                          ? IconButton(
+                              icon: const Icon(Icons.clear),
+                              onPressed: () {
+                                labelController.clear();
+                                setStateDialog(() {
+                                  showSuggestions = false;
+                                });
+                              },
+                            )
+                          : null,
+                    ),
+                    textInputAction: TextInputAction.done,
+                    onChanged: (value) async {
+                      setStateDialog(() {
+                        showSuggestions = false;
+                        suggestions = [];
+                      });
+
+                      // Detect @ or # and show autocomplete
+                      if (value.contains('@')) {
+                        final lastAtIndex = value.lastIndexOf('@');
+                        if (lastAtIndex != -1) {
+                          final query = value.substring(lastAtIndex + 1);
+                          if (query.isNotEmpty && query.length >= 1) {
+                            final users = await autocompleteService.searchUsers(query);
+                            setStateDialog(() {
+                              suggestions = users;
+                              showSuggestions = suggestions.isNotEmpty;
+                            });
+                          }
+                        }
+                      } else if (value.contains('#')) {
+                        final lastHashIndex = value.lastIndexOf('#');
+                        if (lastHashIndex != -1) {
+                          final query = value.substring(lastHashIndex + 1);
+                          if (query.isNotEmpty && query.length >= 1) {
+                            final tags = await autocompleteService.searchTags(query);
+                            setStateDialog(() {
+                              suggestions = tags;
+                              showSuggestions = suggestions.isNotEmpty;
+                            });
+                          }
+                        }
+                      }
+                    },
+                    onSubmitted: (value) {
+                      if (value.trim().isNotEmpty) {
+                        final newLabels = [...labelNames, value.trim()];
+                        updateLabelNames(newLabels);
+                        Navigator.of(context).pop();
+                      }
+                    },
+                  ),
+                  const SizedBox(height: 8),
+                  if (showSuggestions && suggestions.isNotEmpty)
+                    Container(
+                      decoration: BoxDecoration(
+                        border: Border.all(color: Colors.grey),
+                        borderRadius: BorderRadius.circular(4),
+                      ),
+                      constraints: const BoxConstraints(maxHeight: 150),
+                      child: ListView.builder(
+                        shrinkWrap: true,
+                        itemCount: suggestions.length,
+                        itemBuilder: (context, index) {
+                          final suggestion = suggestions[index];
+                          return ListTile(
+                            dense: true,
+                            title: Text(
+                              labelController.text.contains('@') ? '@$suggestion' : '#$suggestion',
+                              style: const TextStyle(fontSize: 14),
+                            ),
+                            onTap: () {
+                              final newLabel = labelController.text.contains('@') ? '@$suggestion' : '#$suggestion';
+                              labelController.text = newLabel;
+                              setStateDialog(() {
+                                showSuggestions = false;
+                                suggestions = [];
+                              });
+                            },
+                          );
+                        },
+                      ),
+                    ),
+                ],
+              );
+            },
           ),
-          textInputAction: TextInputAction.done,
-          onSubmitted: (value) {
-            if (value.trim().isNotEmpty) {
-              final newLabels = [...labelNames, value.trim()];
-              updateLabelNames(newLabels);
-              Navigator.of(context).pop();
-            }
-          },
         ),
         actions: [
           TextButton(
