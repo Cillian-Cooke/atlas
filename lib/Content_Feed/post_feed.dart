@@ -121,6 +121,7 @@ class _FeedPageState extends State<PostFeedPage> {
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
+      useSafeArea: true,
       backgroundColor: Colors.transparent,
       builder: (context) => CommentSectionPopup(
         postId: postId,

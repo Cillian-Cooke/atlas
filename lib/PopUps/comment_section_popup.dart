@@ -217,14 +217,19 @@ class _CommentSectionPopupState extends State<CommentSectionPopup> {
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
+    final keyboardHeight = MediaQuery.of(context).viewInsets.bottom;
+    final availableHeight = MediaQuery.of(context).size.height - keyboardHeight;
 
-    return Container(
-      height: MediaQuery.of(context).size.height * 0.85,
-      decoration: BoxDecoration(
-        color: isDark ? const Color.fromARGB(255, 30, 30, 30) : Colors.white,
-        borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
+    return ConstrainedBox(
+      constraints: BoxConstraints(
+        maxHeight: availableHeight * 0.9,
       ),
-      child: Column(
+      child: Container(
+        decoration: BoxDecoration(
+          color: isDark ? const Color.fromARGB(255, 30, 30, 30) : Colors.white,
+          borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
+        ),
+        child: Column(
         children: [
           // Header
           Container(
@@ -470,6 +475,7 @@ class _CommentSectionPopupState extends State<CommentSectionPopup> {
             ),
           ),
         ],
+      ),
       ),
     );
   }
