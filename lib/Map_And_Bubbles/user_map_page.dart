@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import '../Map_And_Bubbles/map_logic.dart';
 import '../Map_And_Bubbles/bubble_data.dart';
 import '../Map_And_Bubbles/label_data.dart';
@@ -11,6 +12,7 @@ import '../Widgets/dropdown_menu.dart';
 import '../Widgets/title_header.dart';
 import '../Widgets/zoom_slider.dart';
 import '../Services/post_service.dart';
+import '../PopUps/edit/edit_map.dart';
 
 
 class UserMapPage extends StatefulWidget {
@@ -37,6 +39,9 @@ class _UserMapPageState extends State<UserMapPage> with TickerProviderStateMixin
   // Base labels from Firebase (immutable during session)
   List<String> _baseLabelNames = [];
 
+  // Temporary labels being used in this session (overrides base labels for bubble matching)
+  List<String>? _tempLabelNames;
+
   // Temporary filter settings (edited locally, not saved to Firebase)
   bool _tempUnseenPostsOnly = false;
   // Note: _tempRoguePostsEnabled is stored for future use with rogue posts filtering
@@ -52,6 +57,7 @@ class _UserMapPageState extends State<UserMapPage> with TickerProviderStateMixin
   DropdownMenuController? _dropdownController;
   final PostService _postService = PostService();
 
+  bool _isViewingOwnMap = false;
   double _currentZoom = 1.0;
   bool _isLoadingBubbles = false;
 
@@ -82,7 +88,21 @@ class _UserMapPageState extends State<UserMapPage> with TickerProviderStateMixin
       duration: const Duration(milliseconds: 800),
       vsync: this,
     );
+    _checkIfViewingOwnMap();
     _loadUserData();
+  }
+
+  /// Check if currently logged-in user is the same as the viewed user
+  Future<void> _checkIfViewingOwnMap() async {
+    try {
+      final currentUser = FirebaseAuth.instance.currentUser;
+      setState(() {
+        _isViewingOwnMap = currentUser?.uid == widget.userId;
+      });
+      print('Viewing own map: $_isViewingOwnMap');
+    } catch (e) {
+      print('Error checking own map status: $e');
+    }
   }
 
   @override
@@ -133,11 +153,14 @@ class _UserMapPageState extends State<UserMapPage> with TickerProviderStateMixin
       // Store base labels from user's userMapLabels field
       _baseLabelNames = List<String>.from(userData['userMapLabels'] ?? []);
 
-      print('Loading posts for user ${widget.userName} with ${_baseLabelNames.length} labels');
+      // Use temporary labels if they have been set, otherwise use base labels
+      final labelsToUse = _tempLabelNames ?? _baseLabelNames;
+
+      print('Loading posts for user ${widget.userName} with ${labelsToUse.length} labels (temp: ${_tempLabelNames != null})');
 
       // Setup labels from user using mixin method
-      if (_baseLabelNames.isNotEmpty) {
-        setupLabels(_baseLabelNames);
+      if (labelsToUse.isNotEmpty) {
+        setupLabels(labelsToUse);
       }
 
       // Use temporary filter settings (these override any saved settings for this session)
@@ -157,8 +180,8 @@ class _UserMapPageState extends State<UserMapPage> with TickerProviderStateMixin
           ? postsQuery.docs.where((doc) => !seenPostIds.contains(doc.id)).toList()
           : postsQuery.docs;
 
-      // Create bubbles using mixin method
-      final bubbleDataList = createBubblesDataFromPosts(filteredDocs, _baseLabelNames);
+      // Create bubbles using the labels (temporary or base)
+      final bubbleDataList = createBubblesDataFromPosts(filteredDocs, labelsToUse);
 
       // Instantiate bubbles using mixin method
       await instantiateBubblesFromData(bubbleDataList);
@@ -171,20 +194,67 @@ class _UserMapPageState extends State<UserMapPage> with TickerProviderStateMixin
     }
   }
 
-  /// Handle local label editing - updates labels without touching Firebase
+  /// Handle temporary label editing - updates labels without touching Firebase
   void _handleLabelEdit() async {
     final tempSettings = await handleLabelEdit('Edit User Map', 'Edit Labels (Temporary)');
     
-    // Store temporary settings
+    // Store temporary settings and reload bubbles
     if (tempSettings['items'].isNotEmpty) {
       setState(() {
+        _tempLabelNames = List<String>.from(tempSettings['items']);
         _tempUnseenPostsOnly = tempSettings['isUnseen'] ?? false;
         _tempRoguePostsEnabled = tempSettings['isRogue'] ?? true;
-        print('Temp filters set - Unseen: $_tempUnseenPostsOnly, Rogue: $_tempRoguePostsEnabled');
+        print('Temp labels and filters set - Labels: $_tempLabelNames, Unseen: $_tempUnseenPostsOnly, Rogue: $_tempRoguePostsEnabled');
       });
       
-      // Reload bubbles with new temporary filters
+      // Reload bubbles with new temporary labels and filters - this will use the temp labels for bubble matching
       await _loadUserData();
+    }
+  }
+
+  /// Handle permanent label editing - saves to Firebase
+  Future<void> _handlePermanentLabelEdit() async {
+    final result = await showEditMapPagePopUp(
+      context,
+      'Edit Permanent Tags',
+      'Save tags to your map',
+      _baseLabelNames,
+    );
+
+    if (result != null && result['items'] is List && result['items'].isNotEmpty) {
+      final updatedLabels = List<String>.from(result['items'] as List);
+      
+      try {
+        // Save to Firebase
+        await FirebaseFirestore.instance
+            .collection('users')
+            .doc(widget.userId)
+            .update({
+              'userMapLabels': updatedLabels,
+            });
+
+        if (!mounted) return;
+
+        // Update local state and reload bubbles
+        setState(() {
+          _baseLabelNames = updatedLabels;
+          // Clear temporary labels so we use the new permanent labels
+          _tempLabelNames = null;
+        });
+
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Map tags saved: ${updatedLabels.join(", ")}')),
+        );
+
+        // Reload bubbles with new permanent labels
+        await _loadUserData();
+      } catch (e) {
+        print('Error saving permanent tags: $e');
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error saving tags: $e')),
+        );
+      }
     }
   }
 
@@ -258,36 +328,45 @@ class _UserMapPageState extends State<UserMapPage> with TickerProviderStateMixin
                     key: _userHeaderKey,
                     title: widget.userName,
                     subtitle: '${bubbles.length} posts • ${labels.length} labels',
-                    onTap: () => _showDropdownMenu([
-                      DropdownMenuItemData(
-                        label: 'User Info',
-                        icon: Icons.person,
-                        onTap: () {
-                          print('Show user info');
-                        },
-                      ),
-                      DropdownMenuItemData(
-                        label: 'View Profile',
-                        icon: Icons.account_circle,
-                        onTap: () {
-                          print('Navigate to user profile');
-                        },
-                      ),
-                      DropdownMenuItemData(
-                        label: 'Direct Message',
-                        icon: Icons.message,
-                        onTap: () {
-                          print('Share user map');
-                        },
-                      ),
-                      DropdownMenuItemData(
-                        label: 'Share Map',
-                        icon: Icons.share,
-                        onTap: () {
-                          print('Share user map');
-                        },
-                      ),
-                    ]),
+                    onTap: () {
+                      final menuItems = [
+                        DropdownMenuItemData(
+                          label: 'User Info',
+                          icon: Icons.person,
+                          onTap: () {
+                            print('Show user info');
+                          },
+                        ),
+                        DropdownMenuItemData(
+                          label: 'View Profile',
+                          icon: Icons.account_circle,
+                          onTap: () {
+                            print('Navigate to user profile');
+                          },
+                        ),
+                        if (_isViewingOwnMap)
+                          DropdownMenuItemData(
+                            label: 'Edit Map Tags',
+                            icon: Icons.edit,
+                            onTap: _handlePermanentLabelEdit,
+                          ),
+                        DropdownMenuItemData(
+                          label: 'Direct Message',
+                          icon: Icons.message,
+                          onTap: () {
+                            print('Share user map');
+                          },
+                        ),
+                        DropdownMenuItemData(
+                          label: 'Share Map',
+                          icon: Icons.share,
+                          onTap: () {
+                            print('Share user map');
+                          },
+                        ),
+                      ];
+                      _showDropdownMenu(menuItems);
+                    },
                   ),
                   const Spacer(),
                 ],

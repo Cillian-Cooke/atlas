@@ -489,7 +489,7 @@ class _CommentSectionPopupState extends State<CommentSectionPopup> {
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
                     Icon(
-                      Icons.comment_disabled,
+                      Icons.comments_disabled,
                       size: 48,
                       color: isDark ? Colors.grey[600] : Colors.grey[400],
                     ),
