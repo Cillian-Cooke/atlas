@@ -28,7 +28,7 @@ class Bubble {
 /// Parses label names and separates them into tags, usernames, and userIDs
 /// Labels with @ prefix are treated as usernames
 /// Labels with # prefix are treated as tags
-/// Regular labels (no prefix) are treated as usernames for backward compatibility
+/// Regular labels (no prefix) are treated as both tags and usernames for flexibility
 class LabelParser {
   static Map<String, List<String>> parseLabelNames(List<String> labelNames) {
     final tags = <String>[];
@@ -36,16 +36,20 @@ class LabelParser {
     
     for (final label in labelNames) {
       if (label.startsWith('#')) {
-        // Extract tag without the # prefix
+        // Extract tag without the # prefix - only matches hashtags
         final tag = label.substring(1);
         if (tag.isNotEmpty) tags.add(tag);
       } else if (label.startsWith('@')) {
-        // Extract username without the @ prefix
+        // Extract username without the @ prefix - only matches mentions
         final username = label.substring(1);
         if (username.isNotEmpty) usernames.add(username);
       } else {
-        // Treat as username (backward compatibility for non-prefixed labels)
-        if (label.isNotEmpty) usernames.add(label);
+        // Treat as both tag and username for backward compatibility
+        // A label "coding" matches both #coding tags and @coding mentions
+        if (label.isNotEmpty) {
+          tags.add(label);
+          usernames.add(label);
+        }
       }
     }
     

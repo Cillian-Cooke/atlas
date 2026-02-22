@@ -44,6 +44,15 @@ class BubbleSimulationState extends State<BubbleSimulation>
     // no-op for now; kept for API compatibility
   }
 
+  /// Normalize label names by removing @ or # prefix
+  /// Converts "#coding" → "coding", "@alice" → "alice", "flutter" → "flutter"
+  String _normalizeLabelName(String labelName) {
+    if (labelName.startsWith('#') || labelName.startsWith('@')) {
+      return labelName.substring(1);
+    }
+    return labelName;
+  }
+
   void _onTick(Duration elapsed) {
     final dt = (_lastTick == Duration.zero)
         ? 0.016
@@ -52,7 +61,11 @@ class BubbleSimulationState extends State<BubbleSimulation>
 
     // simple physics update
     final bubbles = widget.bubbles;
-    final labels = {for (var l in widget.labels) l.name.toLowerCase(): l.position};
+    // Normalize label names by stripping @ or # prefix for matching with bubble tags
+    final labels = {
+      for (var l in widget.labels)
+        _normalizeLabelName(l.name).toLowerCase(): l.position
+    };
 
     const double maxSpeed = 160.0; // px/sec
     const double accel = 300.0; // px/sec^2
