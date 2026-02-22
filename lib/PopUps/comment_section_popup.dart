@@ -5,11 +5,13 @@ import 'package:firebase_auth/firebase_auth.dart';
 class CommentSectionPopup extends StatefulWidget {
   final String postId;
   final String postOwnerId;
+  final bool commentsEnabled;
 
   const CommentSectionPopup({
     super.key,
     required this.postId,
     required this.postOwnerId,
+    this.commentsEnabled = true,
   });
 
   @override
@@ -34,6 +36,13 @@ class _CommentSectionPopupState extends State<CommentSectionPopup> {
   }
 
   Future<void> _submitComment() async {
+    if (!widget.commentsEnabled) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Comments are disabled for this post')),
+      );
+      return;
+    }
+
     final currentUser = _auth.currentUser;
     if (currentUser == null) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -408,7 +417,7 @@ class _CommentSectionPopupState extends State<CommentSectionPopup> {
                 ),
               ),
             ),
-            child: Row(
+            child: widget.commentsEnabled ? Row(
               children: [
                 // User avatar placeholder
                 CircleAvatar(
@@ -426,6 +435,7 @@ class _CommentSectionPopupState extends State<CommentSectionPopup> {
                   child: TextField(
                     controller: _commentController,
                     focusNode: _commentFocusNode,
+                    enabled: widget.commentsEnabled,
                     decoration: InputDecoration(
                       hintText: _replyingToUsername != null 
                           ? 'Reply to @$_replyingToUsername...' 
@@ -472,6 +482,29 @@ class _CommentSectionPopupState extends State<CommentSectionPopup> {
                         ),
                 ),
               ],
+            ) : Center(
+              child: Padding(
+                padding: const EdgeInsets.all(16.0),
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Icon(
+                      Icons.comment_disabled,
+                      size: 48,
+                      color: isDark ? Colors.grey[600] : Colors.grey[400],
+                    ),
+                    const SizedBox(height: 12),
+                    Text(
+                      'Comments are disabled',
+                      style: TextStyle(
+                        color: isDark ? Colors.grey[400] : Colors.grey[600],
+                        fontSize: 14,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
             ),
           ),
         ],

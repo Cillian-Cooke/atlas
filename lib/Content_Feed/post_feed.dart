@@ -117,7 +117,7 @@ class _FeedPageState extends State<PostFeedPage> {
   }
 
   /// Open comment section popup
-  void _openCommentSection(String postId, String postOwnerId) {
+  void _openCommentSection(String postId, String postOwnerId, {bool commentsEnabled = true}) {
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
@@ -126,6 +126,7 @@ class _FeedPageState extends State<PostFeedPage> {
       builder: (context) => CommentSectionPopup(
         postId: postId,
         postOwnerId: postOwnerId,
+        commentsEnabled: commentsEnabled,
       ),
     );
   }
@@ -386,6 +387,7 @@ class _FeedPageState extends State<PostFeedPage> {
     String description = data['description'] ?? '';
     int likesCount = data['likesCount'] ?? 0;
     int commentsCount = data['commentsCount'] ?? 0;
+    bool commentsEnabled = data['commentsEnabled'] ?? true;
     List<dynamic> tags = data['tags'] ?? [];
     List<dynamic> imageUrls = data['imageUrls'] ?? [];
     String? videoUrl = data['videoUrl'];
@@ -510,10 +512,10 @@ class _FeedPageState extends State<PostFeedPage> {
                       child: Row(
                         children: [
                           IconButton(
-                            icon: Icon(Icons.comment_outlined, color: isDark ? Colors.white : Colors.black),
-                            onPressed: () => _openCommentSection(postId, userID),
+                            icon: Icon(Icons.comment_outlined, color: commentsEnabled ? (isDark ? Colors.white : Colors.black) : Colors.grey),
+                            onPressed: commentsEnabled ? () => _openCommentSection(postId, userID, commentsEnabled: commentsEnabled) : null,
                           ),
-                          Text(_formatCount(commentsCount), style: TextStyle(color: isDark ? Colors.white : Colors.black)),
+                          Text(_formatCount(commentsCount), style: TextStyle(color: commentsEnabled ? (isDark ? Colors.white : Colors.black) : Colors.grey)),
                         ],
                       ),
                     ),
