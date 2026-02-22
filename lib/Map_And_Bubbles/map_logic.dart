@@ -103,18 +103,24 @@ class TiledMapViewerState extends State<TiledMapViewer> with SingleTickerProvide
   }
 
 
-  /// Sets the zoom level programmatically while keeping map centered
+  /// Sets the zoom level programmatically while preserving viewport center
   void setZoom(double zoomLevel) {
     final size = MediaQuery.of(context).size;
-    final mapSize = widget.tileSize * widget.visibleTiles;
-
-    final offsetX = (size.width - mapSize) / 2;
-    final offsetY = (size.height - mapSize) / 2;
-
+    
+    // Get the center of the screen where the user is looking
+    final screenCenter = Offset(size.width / 2, size.height / 2);
+    
+    // Convert screen center to map coordinates using current transformation
+    final inverse = Matrix4.copy(_controller.value)..invert();
+    final mapCenter = inverse.perspectiveTransform(
+      Vector3(screenCenter.dx, screenCenter.dy, 0),
+    );
+    
+    // Set new zoom centered on that map point
     _controller.value = Matrix4.identity()
-      ..translate(offsetX + mapSize / 2, offsetY + mapSize / 2)
+      ..translate(screenCenter.dx, screenCenter.dy)
       ..scale(zoomLevel)
-      ..translate(-mapSize / 2, -mapSize / 2);
+      ..translate(-mapCenter.x, -mapCenter.y);
   }
 
   /// Returns visible map region in map-space
