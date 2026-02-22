@@ -30,6 +30,7 @@ class _FeedPageState extends State<PostFeedPage> {
   final FirebaseAuth _auth = FirebaseAuth.instance;
   final PostService _postService = PostService();
   final ScrollController _scrollController = ScrollController();
+  final Set<String> _locallyViewedPostIds = {}; // Track posts viewed in this session
   
   // ========== CONFIGURABLE SETTINGS ==========
   // Default aspect ratio for preloading posts (width:height)
@@ -53,6 +54,17 @@ class _FeedPageState extends State<PostFeedPage> {
   void dispose() {
     _scrollController.dispose();
     super.dispose();
+  }
+
+  /// Mark a post as seen and remove it locally from the unseen list
+  Future<void> _markPostAsSeenStrict(String postId) async {
+    // Add to local set immediately for strict filtering
+    setState(() {
+      _locallyViewedPostIds.add(postId);
+    });
+    
+    // Mark in Firebase asynchronously in background
+    await _postService.markPostAsSeen(postId);
   }
 
   Future<List<DocumentSnapshot>> _fetchCapturedPosts(List<String> postIds) async {
@@ -257,6 +269,9 @@ class _FeedPageState extends State<PostFeedPage> {
                         var doc = snapshot.data![index];
                         var data = doc.data() as Map<String, dynamic>;
 
+                        // Mark post as seen immediately and strictly
+                        _markPostAsSeenStrict(doc.id);
+
                         return _buildPostCard(doc.id, data);
                       },
                     );
@@ -304,8 +319,8 @@ class _FeedPageState extends State<PostFeedPage> {
                   var doc = snapshot.data!.docs[index];
                   var data = doc.data() as Map<String, dynamic>;
 
-                  // Mark post as seen
-                  _postService.markPostAsSeen(doc.id);
+                  // Mark post as seen immediately and strictly
+                  _markPostAsSeenStrict(doc.id);
 
                   return _buildPostCard(doc.id, data);
                 },
@@ -338,9 +353,9 @@ class _FeedPageState extends State<PostFeedPage> {
                     return const Center(child: Text('No posts available'));
                   }
 
-                  // Filter out seen posts
+                  // Filter out seen posts AND locally viewed posts (strict filtering)
                   final unseenPosts = snapshot.data!.docs
-                      .where((doc) => !seenPostIds.contains(doc.id))
+                      .where((doc) => !seenPostIds.contains(doc.id) && !_locallyViewedPostIds.contains(doc.id))
                       .toList();
 
                   if (unseenPosts.isEmpty) {
@@ -364,8 +379,8 @@ class _FeedPageState extends State<PostFeedPage> {
                       var doc = unseenPosts[index];
                       var data = doc.data() as Map<String, dynamic>;
 
-                      // Mark post as seen
-                      _postService.markPostAsSeen(doc.id);
+                      // Mark post as seen immediately and strictly
+                      _markPostAsSeenStrict(doc.id);
 
                       return _buildPostCard(doc.id, data);
                     },

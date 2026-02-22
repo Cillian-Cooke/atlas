@@ -32,11 +32,16 @@ class _PostCreationPageState extends State<PostCreationPage> {
   bool _donationsEnabled = true;
   bool _isSaving = false;
   bool _isLoadingUserData = true;
+  bool _isLoadingGroups = false;
+  bool _isPublic = true; // true = public, false = personal/private map only
+  List<Map<String, dynamic>> _userGroups = [];
+  List<String> _selectedGroupIds = [];
 
   @override
   void initState() {
     super.initState();
     _loadUserData();
+    _loadUserGroups();
   }
 
   /// Load user data from Firebase
@@ -66,6 +71,36 @@ class _PostCreationPageState extends State<PostCreationPage> {
       debugPrint('Error loading user data: $e');
       if (mounted) {
         setState(() => _isLoadingUserData = false);
+      }
+    }
+  }
+
+  /// Load groups that the user is a member of
+  Future<void> _loadUserGroups() async {
+    try {
+      final user = FirebaseAuth.instance.currentUser;
+      if (user == null) return;
+
+      final querySnapshot = await FirebaseFirestore.instance
+          .collection('groups')
+          .where('members', arrayContains: user.uid)
+          .get();
+
+      if (mounted) {
+        setState(() {
+          _userGroups = querySnapshot.docs
+              .map((doc) => {
+                    'id': doc.id,
+                    'name': doc.data()['name'] ?? 'Unnamed Group',
+                  })
+              .toList();
+          _isLoadingGroups = false;
+        });
+      }
+    } catch (e) {
+      debugPrint('Error loading groups: $e');
+      if (mounted) {
+        setState(() => _isLoadingGroups = false);
       }
     }
   }
@@ -201,6 +236,8 @@ class _PostCreationPageState extends State<PostCreationPage> {
         "commentsCount": 0,
         "commentsEnabled": _commentsEnabled,
         "donationsEnabled": _donationsEnabled,
+        "isPublic": _isPublic,
+        "groupIds": _selectedGroupIds,
         "createdAt": DateTime.now(),
       });
 
@@ -311,6 +348,105 @@ class _PostCreationPageState extends State<PostCreationPage> {
                 labelText: 'Tags (comma separated)',
                 border: OutlineInputBorder(),
                 hintText: 'e.g., flutter, photography, nature',
+              ),
+            ),
+
+            const SizedBox(height: 20),
+
+            // ========== VISIBILITY & GROUPS ==========
+            Container(
+              padding: const EdgeInsets.all(15),
+              decoration: BoxDecoration(
+                color: isDark ? Colors.grey[850] : Colors.grey[100],
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(
+                  color: isDark ? Colors.grey[700]! : Colors.grey[300]!,
+                ),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  // Visibility toggle
+                  Text(
+                    'Post Visibility',
+                    style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                          color: isDark ? Colors.grey[400] : Colors.grey[600],
+                        ),
+                  ),
+                  const SizedBox(height: 8),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: SegmentedButton<bool>(
+                          segments: const <ButtonSegment<bool>>[
+                            ButtonSegment<bool>(
+                              value: true,
+                              label: Text('Public'),
+                              icon: Icon(Icons.public),
+                            ),
+                            ButtonSegment<bool>(
+                              value: false,
+                              label: Text('Personal'),
+                              icon: Icon(Icons.lock),
+                            ),
+                          ],
+                          selected: <bool>{_isPublic},
+                        onSelectionChanged: (Set<bool> newSelection) {
+                            setState(() {
+                              _isPublic = newSelection.first;
+                            });
+                          },
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 16),
+                  // Groups selection
+                  Text(
+                    'Add to Groups',
+                    style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                          color: isDark ? Colors.grey[400] : Colors.grey[600],
+                        ),
+                  ),
+                  const SizedBox(height: 8),
+                  if (_isLoadingGroups)
+                    const SizedBox(
+                      height: 30,
+                      child: Center(child: CircularProgressIndicator()),
+                    )
+                  else if (_userGroups.isEmpty)
+                    Text(
+                      'No groups yet. Create one to add posts to it.',
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: isDark ? Colors.grey[400] : Colors.grey[600],
+                        fontStyle: FontStyle.italic,
+                      ),
+                    )
+                  else
+                    Column(
+                      children: _userGroups.map((group) {
+                        final groupId = group['id'] as String;
+                        final groupName = group['name'] as String;
+                        final isSelected = _selectedGroupIds.contains(groupId);
+                        return CheckboxListTile(
+                          value: isSelected,
+                          onChanged: (value) {
+                            setState(() {
+                              if (value == true) {
+                                _selectedGroupIds.add(groupId);
+                              } else {
+                                _selectedGroupIds.remove(groupId);
+                              }
+                            });
+                          },
+                          title: Text(groupName),
+                          dense: true,
+                          contentPadding: EdgeInsets.zero,
+                        );
+                      }).toList(),
+                    ),
+                ],
               ),
             ),
 
@@ -434,4 +570,5 @@ class _PostCreationPageState extends State<PostCreationPage> {
     _userIDController.dispose();
     super.dispose();
   }
+
 }

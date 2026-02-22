@@ -38,6 +38,9 @@ class _GroupMapPageState extends State<GroupMapPage> with TickerProviderStateMix
   // Base labels from Firebase (immutable during session)
   List<String> _baseLabelNames = [];
 
+  // Temporary labels being used in this session (overrides base labels for bubble matching)
+  List<String>? _tempLabelNames;
+
   // Temporary filter settings (edited locally, not saved to Firebase)
   bool _tempUnseenPostsOnly = false;
   // Note: _tempRoguePostsEnabled is stored for future use with rogue posts filtering
@@ -138,11 +141,14 @@ class _GroupMapPageState extends State<GroupMapPage> with TickerProviderStateMix
       // Store base labels from Firebase
       _baseLabelNames = List<String>.from(groupData['labels'] ?? []);
 
-      print('Loading ${postIds.length} posts and ${_baseLabelNames.length} labels for group ${widget.groupName}');
+      // Use temporary labels if they have been set, otherwise use base labels
+      final labelsToUse = _tempLabelNames ?? _baseLabelNames;
+
+      print('Loading ${postIds.length} posts and ${labelsToUse.length} labels for group ${widget.groupName} (temp: ${_tempLabelNames != null})');
 
       // Setup labels from group using mixin method
-      if (_baseLabelNames.isNotEmpty) {
-        setupLabels(_baseLabelNames);
+      if (labelsToUse.isNotEmpty) {
+        setupLabels(labelsToUse);
       }
 
       // Use temporary filter settings (these override any saved settings for this session)
@@ -172,8 +178,8 @@ class _GroupMapPageState extends State<GroupMapPage> with TickerProviderStateMix
         }
       }
 
-      // Create bubbles using mixin method
-      final bubbleDataList = createBubblesDataFromPosts(postDocs, _baseLabelNames);
+      // Create bubbles using the labels (temporary or base)
+      final bubbleDataList = createBubblesDataFromPosts(postDocs, labelsToUse);
 
       // Instantiate bubbles using mixin method
       await instantiateBubblesFromData(bubbleDataList);
@@ -186,19 +192,20 @@ class _GroupMapPageState extends State<GroupMapPage> with TickerProviderStateMix
     }
   }
 
-  /// Handle local label editing - updates labels without touching Firebase
+  /// Handle temporary label editing - updates labels without touching Firebase
   void _handleLabelEdit() async {
     final tempSettings = await handleLabelEdit('Edit Group Map', 'Edit Labels (Temporary)');
     
-    // Store temporary settings
+    // Store temporary settings and reload bubbles
     if (tempSettings['items'].isNotEmpty) {
       setState(() {
+        _tempLabelNames = List<String>.from(tempSettings['items']);
         _tempUnseenPostsOnly = tempSettings['isUnseen'] ?? false;
         _tempRoguePostsEnabled = tempSettings['isRogue'] ?? true;
-        print('Temp filters set - Unseen: $_tempUnseenPostsOnly, Rogue: $_tempRoguePostsEnabled');
+        print('Temp labels and filters set - Labels: $_tempLabelNames, Unseen: $_tempUnseenPostsOnly, Rogue: $_tempRoguePostsEnabled');
       });
       
-      // Reload bubbles with new temporary filters
+      // Reload bubbles with new temporary labels and filters
       await _loadGroupData();
     }
   }

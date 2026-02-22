@@ -31,15 +31,19 @@ class _LoginScreenState extends State<LoginScreen> {
       final user = await _authService.signInWithGoogle();
 
       if (user != null) {
+        print('✅ GOOGLE SIGN-IN SUCCESSFUL: ${user.uid}');
+        
         // Check if user has completed their profile
         final hasProfile = await _authService.hasCompletedProfile();
 
         if (mounted) {
           if (hasProfile) {
             // User has completed profile, go to main app
+            print('✅ NAVIGATING TO MAIN APP (profile already complete)');
             widget.onLoginSuccess();
           } else {
             // User needs to complete profile, show registration screen
+            print('⚠️  NAVIGATING TO REGISTRATION (profile incomplete)');
             Navigator.of(context).pushReplacement(
               MaterialPageRoute(
                 builder: (context) => RegistrationScreen(
@@ -50,9 +54,11 @@ class _LoginScreenState extends State<LoginScreen> {
           }
         }
       } else {
+        print('❌ GOOGLE SIGN-IN CANCELLED by user');
         setState(() => _errorMessage = 'Sign in was cancelled');
       }
     } catch (e) {
+      print('❌ GOOGLE SIGN-IN ERROR: $e');
       setState(() => _errorMessage = 'Error: ${e.toString()}');
     } finally {
       if (mounted) {

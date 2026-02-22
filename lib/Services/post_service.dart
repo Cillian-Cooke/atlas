@@ -7,6 +7,9 @@ class PostService {
 
   /// Mark a post as seen by the current user
   /// Stores in subcollection: users/{userId}/seenPosts/{postId}
+  /// This operation is idempotent - calling multiple times has the same effect as calling once
+  /// If unseenPostsOnly filter is enabled, this post will NEVER appear again
+  /// Uses server timestamp to track when the post was viewed
   Future<void> markPostAsSeen(String postId) async {
     final user = _auth.currentUser;
     if (user == null) return;
@@ -19,13 +22,15 @@ class PostService {
           .doc(postId)
           .set({
         'viewedAt': FieldValue.serverTimestamp(),
-      });
+      }, SetOptions(merge: true)); // Merge to avoid overwriting other fields
     } catch (e) {
       print('Error marking post as seen: $e');
     }
   }
 
-  /// Get all seen post IDs for the current user
+  /// Get all seen post IDs for the current user (cached for session)
+  /// Returns a snapshot of currently seen post IDs
+  /// Used for strict filtering - if a postId is in this list, it WILL NOT appear when unseenPostsOnly is enabled
   Future<List<String>> getSeenPostIds() async {
     final user = _auth.currentUser;
     if (user == null) return [];
@@ -45,6 +50,8 @@ class PostService {
   }
 
   /// Get stream of seen post IDs for real-time updates
+  /// Reactive stream that updates immediately when new posts are marked as seen
+  /// This enables responsive UI updates when unseenPostsOnly filter is enabled
   Stream<List<String>> getSeenPostIdsStream() {
     final user = _auth.currentUser;
     if (user == null) {

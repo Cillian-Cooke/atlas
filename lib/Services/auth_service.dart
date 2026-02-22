@@ -78,15 +78,18 @@ class AuthService {
           // Rogue posts feature
           'roguePostsEnabled': true,
         });
+        print('✅ NEW ACCOUNT CREATED in Firestore for user: ${user.uid}');
       } else {
         // Update existing user
         await userDoc.update({
           'updatedAt': FieldValue.serverTimestamp(),
           'photoURL': user.photoURL,
         });
+        print('✅ EXISTING ACCOUNT UPDATED for user: ${user.uid}');
       }
     } catch (e) {
-      print('Error creating/updating user document: $e');
+      print('❌ ERROR creating/updating user document: $e');
+      rethrow;
     }
   }
 
@@ -97,7 +100,10 @@ class AuthService {
   }) async {
     try {
       final user = currentUser;
-      if (user == null) return false;
+      if (user == null) {
+        print('❌ PROFILE UPDATE FAILED: No authenticated user');
+        return false;
+      }
 
       await _firestore.collection('users').doc(user.uid).update({
         'username': username,
@@ -105,9 +111,10 @@ class AuthService {
         'updatedAt': FieldValue.serverTimestamp(),
       });
 
+      print('✅ PROFILE COMPLETED for user: ${user.uid} with username: $username');
       return true;
     } catch (e) {
-      print('Error updating user profile: $e');
+      print('❌ ERROR updating user profile: $e');
       return false;
     }
   }
@@ -157,15 +164,29 @@ class AuthService {
   Future<bool> hasCompletedProfile() async {
     try {
       final user = currentUser;
-      if (user == null) return false;
+      if (user == null) {
+        print('❌ PROFILE CHECK: No authenticated user');
+        return false;
+      }
 
       final userData = await getUserData(user.uid);
-      if (userData == null) return false;
+      if (userData == null) {
+        print('❌ PROFILE CHECK: No user data found for ${user.uid}');
+        return false;
+      }
 
       final username = userData['username'];
-      return username != null && username.toString().isNotEmpty;
+      final isComplete = username != null && username.toString().isNotEmpty;
+      
+      if (isComplete) {
+        print('✅ PROFILE COMPLETE: User ${user.uid} has username: $username');
+      } else {
+        print('⚠️  PROFILE INCOMPLETE: User ${user.uid} needs to complete registration');
+      }
+      
+      return isComplete;
     } catch (e) {
-      print('Error checking profile completion: $e');
+      print('❌ ERROR checking profile completion: $e');
       return false;
     }
   }

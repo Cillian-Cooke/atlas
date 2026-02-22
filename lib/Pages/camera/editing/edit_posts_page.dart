@@ -81,8 +81,38 @@ class _EditPostsPageState extends State<EditPostsPage> {
       text: postData['description'] ?? '',
     );
     bool commentsEnabled = postData['commentsEnabled'] ?? true;
+    bool isPublic = postData['isPublic'] ?? true;
     List<String> tags = List<String>.from(postData['tags'] ?? []);
+    List<String> selectedGroupIds = List<String>.from(postData['groupIds'] ?? []);
     final tagController = TextEditingController();
+    List<Map<String, dynamic>> userGroups = [];
+    bool isLoadingGroups = true;
+
+    // Load user's groups
+    Future<void> loadUserGroups() async {
+      try {
+        final user = FirebaseAuth.instance.currentUser;
+        if (user == null) return;
+
+        final querySnapshot = await _firestore
+            .collection('groups')
+            .where('members', arrayContains: user.uid)
+            .get();
+
+        userGroups = querySnapshot.docs
+            .map((doc) => {
+                  'id': doc.id,
+                  'name': doc.data()['name'] ?? 'Unnamed Group',
+                })
+            .toList();
+        isLoadingGroups = false;
+      } catch (e) {
+        print('Error loading groups: $e');
+        isLoadingGroups = false;
+      }
+    }
+
+    loadUserGroups();
 
     showDialog(
       context: context,
@@ -108,6 +138,75 @@ class _EditPostsPageState extends State<EditPostsPage> {
                   ),
                   maxLines: 3,
                 ),
+                const SizedBox(height: 16),
+
+                // Visibility toggle
+                const Text(
+                  'Visibility',
+                  style: TextStyle(fontWeight: FontWeight.bold),
+                ),
+                const SizedBox(height: 8),
+                SegmentedButton<bool>(
+                  segments: const <ButtonSegment<bool>>[
+                    ButtonSegment<bool>(
+                      value: true,
+                      label: Text('Public'),
+                      icon: Icon(Icons.public),
+                    ),
+                    ButtonSegment<bool>(
+                      value: false,
+                      label: Text('Personal'),
+                      icon: Icon(Icons.lock),
+                    ),
+                  ],
+                  selected: <bool>{isPublic},
+                  onSelectionChanged: (Set<bool> newSelection) {
+                    setDialogState(() {
+                      isPublic = newSelection.first;
+                    });
+                  },
+                ),
+                const SizedBox(height: 16),
+
+                // Groups section
+                const Text(
+                  'Groups',
+                  style: TextStyle(fontWeight: FontWeight.bold),
+                ),
+                const SizedBox(height: 8),
+                if (isLoadingGroups)
+                  const SizedBox(
+                    height: 30,
+                    child: Center(child: CircularProgressIndicator()),
+                  )
+                else if (userGroups.isEmpty)
+                  Text(
+                    'No groups available',
+                    style: Theme.of(context).textTheme.bodySmall,
+                  )
+                else
+                  Column(
+                    children: userGroups.map((group) {
+                      final groupId = group['id'] as String;
+                      final groupName = group['name'] as String;
+                      final isSelected = selectedGroupIds.contains(groupId);
+                      return CheckboxListTile(
+                        value: isSelected,
+                        onChanged: (value) {
+                          setDialogState(() {
+                            if (value == true) {
+                              selectedGroupIds.add(groupId);
+                            } else {
+                              selectedGroupIds.remove(groupId);
+                            }
+                          });
+                        },
+                        title: Text(groupName),
+                        dense: true,
+                        contentPadding: EdgeInsets.zero,
+                      );
+                    }).toList(),
+                  ),
                 const SizedBox(height: 16),
 
                 // Comments toggle
@@ -191,6 +290,8 @@ class _EditPostsPageState extends State<EditPostsPage> {
                 _updatePost(post.id, {
                   'description': descriptionController.text.trim(),
                   'commentsEnabled': commentsEnabled,
+                  'isPublic': isPublic,
+                  'groupIds': selectedGroupIds,
                   'tags': tags,
                 });
                 Navigator.pop(context);
@@ -283,6 +384,8 @@ class _EditPostsPageState extends State<EditPostsPage> {
                 final description = postData['description'] as String? ?? '';
                 final tags = List<String>.from(postData['tags'] ?? []);
                 final commentsEnabled = postData['commentsEnabled'] ?? true;
+                final isPublic = postData['isPublic'] ?? true;
+                final groupIds = List<String>.from(postData['groupIds'] ?? []);
                 final createdAt = postData['createdAt'] as Timestamp?;
 
                 return SingleChildScrollView(
@@ -356,6 +459,57 @@ class _EditPostsPageState extends State<EditPostsPage> {
                                       label: Text(tag),
                                       backgroundColor:
                                           Colors.blue.withOpacity(0.2),
+                                    ),
+                                ],
+                              ),
+                              const SizedBox(height: 16),
+                            ],
+
+                            // Visibility
+                            const Text(
+                              'Visibility',
+                              style: TextStyle(fontWeight: FontWeight.bold),
+                            ),
+                            const SizedBox(height: 8),
+                            Container(
+                              padding: const EdgeInsets.all(12),
+                              decoration: BoxDecoration(
+                                color: isDark
+                                    ? Colors.grey[800]
+                                    : Colors.grey[100],
+                                borderRadius: BorderRadius.circular(8),
+                              ),
+                              child: Row(
+                                children: [
+                                  Icon(
+                                    isPublic ? Icons.public : Icons.lock,
+                                    size: 16,
+                                  ),
+                                  const SizedBox(width: 8),
+                                  Text(
+                                    isPublic ? 'Public' : 'Personal',
+                                  ),
+                                ],
+                              ),
+                            ),
+                            const SizedBox(height: 16),
+
+                            // Groups
+                            if (groupIds.isNotEmpty) ...[
+                              const Text(
+                                'In Groups',
+                                style: TextStyle(fontWeight: FontWeight.bold),
+                              ),
+                              const SizedBox(height: 8),
+                              Wrap(
+                                spacing: 8,
+                                children: [
+                                  for (final groupId in groupIds)
+                                    Chip(
+                                      label: Text(groupId.substring(0, groupId.length > 10 ? 10 : groupId.length)),
+                                      backgroundColor:
+                                          Colors.green.withOpacity(0.2),
+                                      avatar: const Icon(Icons.group, size: 16),
                                     ),
                                 ],
                               ),

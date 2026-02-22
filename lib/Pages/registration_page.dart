@@ -80,8 +80,10 @@ class _RegistrationScreenState extends State<RegistrationScreen> {
 
       if (success) {
         setState(() => _errorMessage = null);
-        // Navigate to main app
+        // Notify registration complete
         if (mounted) {
+          widget.onRegistrationComplete();
+          // Navigate to main app
           Navigator.of(context).pushAndRemoveUntil(
             MaterialPageRoute(
               builder: (context) => const MyNavigatorBar(title: 'Navigation Bar'),
