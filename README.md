@@ -13,6 +13,14 @@ Atlas helps users create a personalized social presence and interact with a comm
 - Feed browsing, groups, and social interactions
 - Responsive Flutter UI for Android, iOS, web, and desktop
 
+## 🧭 A New Kind of Social Media
+
+Atlas is built around the idea that a social app can be meaningful without relying on opaque recommendation engines, advertising algorithms, or AI-driven engagement loops.
+
+- The app is designed to keep the experience transparent, honest, and user-driven.
+- It aims to prove that social media can be built without sacrificing usability or quality.
+- Instead of optimizing for attention, Atlas focuses on simple, direct connections and clean content discovery.
+
 ## ✨ Key Features
 
 - **Google Sign-In** using Firebase Authentication
