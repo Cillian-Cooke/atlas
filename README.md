@@ -21,6 +21,17 @@ Atlas is built around the idea that a social app can be meaningful without relyi
 - It aims to prove that social media can be built without sacrificing usability or quality.
 - Instead of optimizing for attention, Atlas focuses on simple, direct connections and clean content discovery.
 
+## 🎯 What Atlas Is Trying to Prove
+
+Atlas is an experiment in building social media without the usual engagement-maximizing machinery.
+
+- No advertisements. The platform is envisioned as not-for-profit, so revenue does not steer the user experience.
+- No algorithmic feed. Content discovery is intentional rather than manipulated by hidden ranking systems.
+- No AI-generated or externally edited uploads. All posted material is created in-app to preserve authenticity.
+- Local-first social discovery. Proximity-based interactions encourage real-world connection instead of distant anonymous attention.
+
+This project was born from the belief that the internet should bring people closer, not keep them hooked. It is a working prototype that asks: can a social app be meaningful if it is built around trust, transparency, and community?
+
 ## ✨ Key Features
 
 - **Google Sign-In** using Firebase Authentication
